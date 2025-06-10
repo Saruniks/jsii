@@ -6,7 +6,6 @@ tsconfig.tsbuildinfo
 .idea
 .vs
 dist/
-.vscode
 *.map
 *.tsbuildinfo
 *.tabl.json
@@ -15,3 +14,5 @@ dist/
 build/
 coverage/
 jsii-outdir/
+test-rust-generation/
+rust-cdk-example/
