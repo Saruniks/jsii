@@ -11,6 +11,7 @@ import { Golang } from './go';
 import { JavaBuilder } from './java';
 import JavaScript from './js';
 import Python from './python';
+import Rust from './rust';
 
 export enum TargetName {
   DOTNET = 'dotnet',
@@ -18,6 +19,7 @@ export enum TargetName {
   JAVA = 'java',
   JAVASCRIPT = 'js',
   PYTHON = 'python',
+  RUST = 'rust',
 }
 
 export type BuilderFactory = (
@@ -33,6 +35,7 @@ export const ALL_BUILDERS: { [key in TargetName]: BuilderFactory } = {
     new IndependentPackageBuilder(TargetName.JAVASCRIPT, JavaScript, ms, o),
   python: (ms, o) =>
     new IndependentPackageBuilder(TargetName.PYTHON, Python, ms, o),
+  rust: (ms, o) => new IndependentPackageBuilder(TargetName.RUST, Rust, ms, o),
 };
 
 export const INCOMPLETE_DISCLAIMER_NONCOMPILING =

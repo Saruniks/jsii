@@ -1,0 +1,8 @@
+{
+  "terminal.integrated.shell.linux": "/bin/bash",
+  "files.associations": {
+    "*.rs": "rust"
+  },
+  "rust-analyzer.checkOnSave.command": "clippy",
+  "terminal.integrated.cwd": "${workspaceFolder}"
+} 

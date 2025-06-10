@@ -1,0 +1,24 @@
+{
+  "name": "@jsii/rust-runtime-test",
+  "version": "0.0.0",
+  "private": true,
+  "description": "jsii runtime tests for Rust",
+  "scripts": {
+    "build": "yarn gen:calc",
+    "fmt": "cd project && cargo fmt",
+    "lint": "cd project && cargo clippy -- -D warnings",
+    "test": "cd project && cargo test",
+    "lint:fix": "yarn lint && yarn fmt",
+    "gen:calc": "node build-tools/gen-calc.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "jsii-pacmak": "^0.0.0"
+  },
+  "dependencies": {
+    "fs-extra": "^10.1.0",
+    "@jsii/rust-runtime": "^0.0.0"
+  }
+} 

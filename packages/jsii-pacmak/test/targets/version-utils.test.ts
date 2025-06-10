@@ -118,6 +118,7 @@ describe(toReleaseVersion, () => {
       java: '1.2.3',
       js: '1.2.3',
       python: '1.2.3',
+      rust: '1.2.3',
     },
     '1.2.3-pre': {
       dotnet: '1.2.3-pre',
@@ -126,6 +127,7 @@ describe(toReleaseVersion, () => {
       js: '1.2.3-pre',
       python:
         /Unable to map prerelease identifier \(in: 1\.2\.3-pre\) components to python: \[ 'pre' \]/,
+      rust: '1.2.3-pre',
     },
     '1.2.3-dev.123.0+abc123.foo.bar': {
       dotnet: '1.2.3-dev.123.0+abc123.foo.bar',
@@ -133,6 +135,7 @@ describe(toReleaseVersion, () => {
       java: '1.2.3-dev.123.0+abc123.foo.bar',
       js: '1.2.3-dev.123.0+abc123.foo.bar',
       python: '1.2.3.dev123+abc123.foo.bar',
+      rust: '1.2.3-dev.123.0+abc123.foo.bar',
     },
     '1.2.3-alpha.1337': {
       dotnet: '1.2.3-alpha.1337',
@@ -140,6 +143,7 @@ describe(toReleaseVersion, () => {
       java: '1.2.3-alpha.1337',
       js: '1.2.3-alpha.1337',
       python: '1.2.3.a1337',
+      rust: '1.2.3-alpha.1337',
     },
     '1.2.3-beta.42': {
       dotnet: '1.2.3-beta.42',
@@ -147,6 +151,7 @@ describe(toReleaseVersion, () => {
       java: '1.2.3-beta.42',
       js: '1.2.3-beta.42',
       python: '1.2.3.b42',
+      rust: '1.2.3-beta.42',
     },
     '1.2.3-rc.9': {
       dotnet: '1.2.3-rc.9',
@@ -154,6 +159,7 @@ describe(toReleaseVersion, () => {
       java: '1.2.3-rc.9',
       js: '1.2.3-rc.9',
       python: '1.2.3.rc9',
+      rust: '1.2.3-rc.9',
     },
     '1.2.3-rc.123.post.456.dev.789': {
       dotnet: '1.2.3-rc.123.post.456.dev.789',
@@ -161,6 +167,7 @@ describe(toReleaseVersion, () => {
       java: '1.2.3-rc.123.post.456.dev.789',
       js: '1.2.3-rc.123.post.456.dev.789',
       python: '1.2.3.rc123.post456.dev789',
+      rust: '1.2.3-rc.123.post.456.dev.789',
     },
     '1.2.3-rc.alpha': {
       dotnet: '1.2.3-rc.alpha',
@@ -169,6 +176,7 @@ describe(toReleaseVersion, () => {
       js: '1.2.3-rc.alpha',
       python:
         /Unable to map prerelease identifier \(in: 1.2.3-rc.alpha\) components to python: \[ 'rc', 'alpha' \]/,
+      rust: '1.2.3-rc.alpha',
     },
   };
 
