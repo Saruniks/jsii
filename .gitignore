@@ -16,4 +16,4 @@ coverage/
 jsii-outdir/
 test-rust-generation/
 rust-cdk-example/
-target-dependency-generation/
+test-dependency-generation/
