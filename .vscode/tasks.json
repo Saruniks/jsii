@@ -1,0 +1,40 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Build Rust Target (jsii-calc)",
+      "type": "shell",
+      "command": "./build-rust-target.sh",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared",
+        "showReuseMessage": true,
+        "clear": false
+      },
+      "problemMatcher": [],
+      "detail": "Builds jsii-pacmak with Rust target and generates Rust code for jsii-calc"
+    },
+    {
+      "label": "Build Rust Target (All in Docker)",
+      "type": "shell",
+      "command": "./build-rust-target-docker.sh",
+      "group": "build",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared",
+        "showReuseMessage": true,
+        "clear": false
+      },
+      "problemMatcher": [],
+      "detail": "Builds everything in Docker including cargo build"
+    }
+  ]
+} 
