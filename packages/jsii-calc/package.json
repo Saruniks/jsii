@@ -79,6 +79,8 @@
         "classifiers": [
           "Test :: Classifier :: Is Dummy"
         ]
+      },
+      "rust": {
       }
     },
     "tsc": {
