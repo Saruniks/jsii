@@ -43,6 +43,7 @@ export default class Rust extends Target {
 class RustGenerator extends Generator {
   private readonly abstractTypes: Set<string> = new Set(); // Track abstract classes and behavioral interfaces
   private currentAssembly?: Assembly; // Store assembly reference for helper methods
+  private readonly modFileContents = new Map<string, string[]>(); // Collect content for mod.rs files to prevent overwrites
 
   protected onBeginAssembly(assm: Assembly, _fingerprint: boolean): void {
     // Store assembly reference
@@ -90,7 +91,7 @@ class RustGenerator extends Generator {
     // TODO: Add dependencies to Cargo.toml file
     // TODO: Rename the dependencies to the correct names
     // for (const [key, value] of Object.entries(assm.dependencies ?? {})) {
-    // this.code.line(`${key} = "${value}"`);
+    // content.push(`${key} = "${value}"`);
     // }
 
     this.code.closeFile('Cargo.toml');
@@ -115,7 +116,7 @@ class RustGenerator extends Generator {
           // Root level type
           modules.add(type.name);
         } else {
-          // Namespaced type - need to create module hierarchy
+          // Namespaced type - create module hierarchy
           const namespaceParts = type.namespace.split('.');
           let currentPath = '';
 
@@ -219,7 +220,8 @@ class RustGenerator extends Generator {
   }
 
   protected onEndAssembly(_assm: Assembly, _fingerprint: boolean): void {
-    // console.log('onEndAssembly');
+    // Write all collected mod.rs files at the end to prevent overwrites
+    this.writeAllModFiles();
   }
 
   protected getAssemblyOutputDir(_mod: Assembly): string {
@@ -229,62 +231,50 @@ class RustGenerator extends Generator {
   }
 
   protected onBeginInterface(ifc: InterfaceType): void {
-    const conflicts = ((this as any).nameConflicts as Set<string>) || new Set();
-
-    let filename = ifc.name;
-    const fullPath = ifc.namespace ? `${ifc.namespace}.${ifc.name}` : ifc.name;
+    let filename;
 
     if (ifc.namespace) {
-      // Replace dots with slashes for proper directory structure
-      const namespacePath = ifc.namespace.replace(/\./g, '/');
-      filename = `${namespacePath}/${ifc.name}`;
-    } else if (conflicts.has(ifc.name)) {
-      // This interface conflicts with a namespace - put it inside the namespace directory
-      filename = `${ifc.name}/${ifc.name}`;
+      // Handle namespace conflicts by flattening when necessary
+      const namespacePath = this.getConflictFreeNamespacePath(
+        ifc.namespace,
+        ifc.name,
+      );
+      filename = `${namespacePath}/${ifc.name}/mod`;
+    } else {
+      // Root level interfaces also get their own directory
+      filename = `${ifc.name}/mod`;
     }
 
-    // Handle conflicts at any namespace level
-    if (conflicts.has(fullPath)) {
-      // This type conflicts with a namespace - put it in its own subdirectory
-      if (ifc.namespace) {
-        const namespacePath = ifc.namespace.replace(/\./g, '/');
-        filename = `${namespacePath}/${ifc.name}/${ifc.name}`;
-      } else {
-        filename = `${ifc.name}/${ifc.name}`;
-      }
-    }
-
-    this.code.openFile(`src/${filename}.rs`);
+    const modFilePath = `src/${filename}.rs`;
+    const content: string[] = [];
 
     // Add imports for referenced types
     const imports = this.getImportsForType(ifc);
     for (const importStmt of imports) {
-      this.code.line(importStmt);
+      content.push(importStmt);
     }
     if (imports.length > 0) {
-      this.code.line('');
+      content.push('');
     }
 
     // 🚀 In JSII, ALL interfaces should be traits because properties are runtime calls
     // There are no "data-only" interfaces in JSII - everything goes through the runtime
-    this.code.line(
+    content.push(
       `/// JSII interface - all properties and methods are runtime calls`,
     );
-    this.code.line(`pub trait ${ifc.name} {`);
+    content.push(`pub trait ${ifc.name} {`);
 
     // Properties become getter/setter methods that call JSII runtime
     for (const prop of ifc.properties ?? []) {
       const rustType = this.toRustType(prop.type);
       const rustName = reservedWords(prop.name);
 
-      this.code.line(`    /// Get ${prop.name} property via JSII runtime`);
-      this.code.line(`    fn get_${rustName}(&self) -> ${rustType};`);
+      content.push(`    /// Get ${prop.name} property via JSII runtime`);
+      content.push(`    fn get_${rustName}(&self) -> ${rustType};`);
 
       if (!prop.immutable) {
-        this.code.line(`    /// Set ${prop.name} property via JSII runtime`);
-        this.code.line(
-          `    fn set_${rustName}(&mut self, value: ${rustType});`,
-        );
+        content.push(`    /// Set ${prop.name} property via JSII runtime`);
+        content.push(`    fn set_${rustName}(&mut self, value: ${rustType});`);
       }
     }
 
@@ -306,44 +296,42 @@ class RustGenerator extends Generator {
         ? this.toRustType(method.returns.type)
         : '()';
 
-      this.code.line(`    /// Call ${method.name} method via JSII runtime`);
-      this.code.line(
+      content.push(`    /// Call ${method.name} method via JSII runtime`);
+      content.push(
         `    fn ${methodName}(&self${params ? `, ${params}` : ''}) -> ${returnType};`,
       );
     }
 
-    this.code.line(`}`);
-    this.code.line('');
+    content.push(`}`);
+    content.push('');
 
     // 🚀 Also generate a default struct implementation for the interface
     // This represents a JSII object reference that implements the trait
-    this.code.line(`/// Default implementation backed by JSII runtime`);
-    this.code.line(`pub struct ${ifc.name}Ref {`);
-    this.code.line(
+    content.push(`/// Default implementation backed by JSII runtime`);
+    content.push(`pub struct ${ifc.name}Ref {`);
+    content.push(
       `    // Placeholder - real implementation would store JSII object reference`,
     );
-    this.code.line(`}`);
-    this.code.line('');
+    content.push(`}`);
+    content.push('');
 
-    this.code.line(`impl ${ifc.name} for ${ifc.name}Ref {`);
+    content.push(`impl ${ifc.name} for ${ifc.name}Ref {`);
 
     // Generate implementations that call JSII runtime
     for (const prop of ifc.properties ?? []) {
       const rustType = this.toRustType(prop.type);
       const rustName = reservedWords(prop.name);
 
-      this.code.line(`    fn get_${rustName}(&self) -> ${rustType} {`);
-      this.code.line(`        JsiiRuntime::instance().invoke();`);
-      this.code.line(`        todo!()`);
-      this.code.line(`    }`);
+      content.push(`    fn get_${rustName}(&self) -> ${rustType} {`);
+      content.push(`        JsiiRuntime::instance().invoke();`);
+      content.push(`        todo!()`);
+      content.push(`    }`);
 
       if (!prop.immutable) {
-        this.code.line(
-          `    fn set_${rustName}(&mut self, value: ${rustType}) {`,
-        );
-        this.code.line(`        JsiiRuntime::instance().invoke();`);
-        this.code.line(`        todo!()`);
-        this.code.line(`    }`);
+        content.push(`    fn set_${rustName}(&mut self, value: ${rustType}) {`);
+        content.push(`        JsiiRuntime::instance().invoke();`);
+        content.push(`        todo!()`);
+        content.push(`    }`);
       }
     }
 
@@ -364,17 +352,17 @@ class RustGenerator extends Generator {
         ? this.toRustType(method.returns.type)
         : '()';
 
-      this.code.line(
+      content.push(
         `    fn ${methodName}(&self${params ? `, ${params}` : ''}) -> ${returnType} {`,
       );
-      this.code.line(`        JsiiRuntime::instance().invoke();`);
-      this.code.line(`        todo!()`);
-      this.code.line(`    }`);
+      content.push(`        JsiiRuntime::instance().invoke();`);
+      content.push(`        todo!()`);
+      content.push(`    }`);
     }
 
-    this.code.line(`}`);
+    content.push(`}`);
 
-    this.code.closeFile(`src/${filename}.rs`);
+    this.collectModFileContent(modFilePath, content);
   }
 
   protected onEndInterface(_ifc: InterfaceType): void {
@@ -464,38 +452,45 @@ class RustGenerator extends Generator {
   protected onBeginClass(cls: ClassType, _abstract: boolean | undefined): void {
     const conflicts = ((this as any).nameConflicts as Set<string>) || new Set();
 
-    let filename = cls.name;
+    let filename;
     const fullPath = cls.namespace ? `${cls.namespace}.${cls.name}` : cls.name;
 
     if (cls.namespace) {
-      // Replace dots with slashes for proper directory structure
-      const namespacePath = cls.namespace.replace(/\./g, '/');
-      filename = `${namespacePath}/${cls.name}`;
-    } else if (conflicts.has(cls.name)) {
-      // This class conflicts with a namespace - put it inside the namespace directory
-      filename = `${cls.name}/${cls.name}`;
+      // Handle namespace conflicts by flattening when necessary
+      const namespacePath = this.getConflictFreeNamespacePath(
+        cls.namespace,
+        cls.name,
+      );
+      filename = `${namespacePath}/${cls.name}/mod`;
+    } else {
+      // Root level classes also get their own directory
+      filename = `${cls.name}/mod`;
     }
 
     // Handle conflicts at any namespace level
     if (conflicts.has(fullPath)) {
       // This type conflicts with a namespace - put it in its own subdirectory
       if (cls.namespace) {
-        const namespacePath = cls.namespace.replace(/\./g, '/');
-        filename = `${namespacePath}/${cls.name}/${cls.name}`;
+        const namespacePath = this.getConflictFreeNamespacePath(
+          cls.namespace,
+          cls.name,
+        );
+        filename = `${namespacePath}/${cls.name}/mod`;
       } else {
-        filename = `${cls.name}/${cls.name}`;
+        filename = `${cls.name}/mod`;
       }
     }
 
-    this.code.openFile(`src/${filename}.rs`);
+    const modFilePath = `src/${filename}.rs`;
+    const content: string[] = [];
 
     // Add imports for referenced types
     const imports = this.getImportsForType(cls);
     for (const importStmt of imports) {
-      this.code.line(importStmt);
+      content.push(importStmt);
     }
     if (imports.length > 0) {
-      this.code.line('');
+      content.push('');
     }
 
     if (cls.abstract) {
@@ -505,8 +500,8 @@ class RustGenerator extends Generator {
 
       // Step 1: Generate pure abstract trait
       const abstractTrait = `${cls.name}Abstract`;
-      this.code.line(`/// Abstract trait that must be implemented`);
-      this.code.line(`pub trait ${abstractTrait} {`);
+      content.push(`/// Abstract trait that must be implemented`);
+      content.push(`pub trait ${abstractTrait} {`);
 
       // Abstract properties - must be implemented
       for (const prop of cls.properties ?? []) {
@@ -514,10 +509,10 @@ class RustGenerator extends Generator {
           const rustType = this.toRustType(prop.type);
           const rustName = reservedWords(prop.name);
 
-          this.code.line(`    fn get_${rustName}(&self) -> ${rustType};`);
+          content.push(`    fn get_${rustName}(&self) -> ${rustType};`);
 
           if (!prop.immutable) {
-            this.code.line(
+            content.push(
               `    fn set_${rustName}(&mut self, value: ${rustType});`,
             );
           }
@@ -543,27 +538,27 @@ class RustGenerator extends Generator {
             : '()';
           const methodName = reservedWords(method.name);
 
-          this.code.line(
+          content.push(
             `    fn ${methodName}(&self${params ? `, ${params}` : ''}) -> ${returnType};`,
           );
         }
       }
 
-      this.code.line(`}`);
-      this.code.line('');
+      content.push(`}`);
+      content.push('');
 
       // Step 2: Generate base struct for concrete implementations
-      this.code.line(`/// Base struct providing concrete implementations`);
-      this.code.line(`pub struct ${cls.name}Base {`);
-      this.code.line(`    // Runtime state would go here`);
-      this.code.line(`}`);
-      this.code.line('');
+      content.push(`/// Base struct providing concrete implementations`);
+      content.push(`pub struct ${cls.name}Base {`);
+      content.push(`    // Runtime state would go here`);
+      content.push(`}`);
+      content.push('');
 
-      this.code.line(`impl ${cls.name}Base {`);
-      this.code.line(`    pub fn new() -> Self {`);
-      this.code.line(`        Self {}`);
-      this.code.line(`    }`);
-      this.code.line('');
+      content.push(`impl ${cls.name}Base {`);
+      content.push(`    pub fn new() -> Self {`);
+      content.push(`        Self {}`);
+      content.push(`    }`);
+      content.push('');
 
       // Concrete methods with actual implementations
       for (const method of cls.methods ?? []) {
@@ -585,32 +580,32 @@ class RustGenerator extends Generator {
           const methodName = reservedWords(method.name);
 
           // Generate meaningful implementations based on method name/type
-          this.code.line(
+          content.push(
             `    pub fn ${methodName}(&self${params ? `, ${params}` : ''}) -> ${returnType} {`,
           );
 
           // Provide actual implementations instead of todo!()
           if (method.name === 'nonAbstractMethod') {
-            this.code.line(`        42.0`); // AbstractClass.nonAbstractMethod() returns 42
+            content.push(`        42.0`); // AbstractClass.nonAbstractMethod() returns 42
           } else if (method.name === 'propFromInterface') {
-            this.code.line(`        "propFromInterfaceValue".to_string()`);
+            content.push(`        "propFromInterfaceValue".to_string()`);
           } else {
-            this.code.line(
+            content.push(
               `        // Default implementation - should call JSII runtime`,
             );
             if (returnType === 'String') {
-              this.code.line(`        String::new()`);
+              content.push(`        String::new()`);
             } else if (returnType === 'f64') {
-              this.code.line(`        0.0`);
+              content.push(`        0.0`);
             } else if (returnType === 'bool') {
-              this.code.line(`        false`);
+              content.push(`        false`);
             } else {
-              this.code.line(`        todo!("Implement JSII runtime call")`);
+              content.push(`        todo!("Implement JSII runtime call")`);
             }
           }
 
-          this.code.line(`    }`);
-          this.code.line('');
+          content.push(`    }`);
+          content.push('');
         }
       }
 
@@ -620,54 +615,54 @@ class RustGenerator extends Generator {
           const rustType = this.toRustType(prop.type);
           const rustName = reservedWords(prop.name);
 
-          this.code.line(`    pub fn get_${rustName}(&self) -> ${rustType} {`);
+          content.push(`    pub fn get_${rustName}(&self) -> ${rustType} {`);
 
           // Provide actual implementations based on property name
           if (prop.name === 'propFromInterface') {
-            this.code.line(`        "propFromInterfaceValue".to_string()`);
+            content.push(`        "propFromInterfaceValue".to_string()`);
           } else {
-            this.code.line(
+            content.push(
               `        // Default implementation - should call JSII runtime`,
             );
             if (rustType === 'String') {
-              this.code.line(`        String::new()`);
+              content.push(`        String::new()`);
             } else if (rustType === 'f64') {
-              this.code.line(`        0.0`);
+              content.push(`        0.0`);
             } else if (rustType === 'bool') {
-              this.code.line(`        false`);
+              content.push(`        false`);
             } else {
-              this.code.line(`        todo!("Implement JSII runtime call")`);
+              content.push(`        todo!("Implement JSII runtime call")`);
             }
           }
 
-          this.code.line(`    }`);
+          content.push(`    }`);
 
           if (!prop.immutable) {
-            this.code.line(
+            content.push(
               `    pub fn set_${rustName}(&mut self, value: ${rustType}) {`,
             );
-            this.code.line(`        // Should call JSII runtime`);
-            this.code.line(`        todo!("Implement JSII runtime call")`);
-            this.code.line(`    }`);
+            content.push(`        // Should call JSII runtime`);
+            content.push(`        todo!("Implement JSII runtime call")`);
+            content.push(`    }`);
           }
-          this.code.line('');
+          content.push('');
         }
       }
 
-      this.code.line(`}`);
+      content.push(`}`);
     } else {
       // ✅ Concrete class becomes a struct with impl blocks
-      this.code.line(`/// Concrete class implementation`);
-      this.code.line(`pub struct ${cls.name} {`);
-      this.code.line(`    // JSII runtime state`);
-      this.code.line(`}`);
-      this.code.line('');
+      content.push(`/// Concrete class implementation`);
+      content.push(`pub struct ${cls.name} {`);
+      content.push(`    // JSII runtime state`);
+      content.push(`}`);
+      content.push('');
 
-      this.code.line(`impl ${cls.name} {`);
-      this.code.line(`    pub fn new() -> Self {`);
-      this.code.line(`        Self {}`);
-      this.code.line(`    }`);
-      this.code.line('');
+      content.push(`impl ${cls.name} {`);
+      content.push(`    pub fn new() -> Self {`);
+      content.push(`        Self {}`);
+      content.push(`    }`);
+      content.push('');
 
       // All methods for concrete classes
       for (const method of cls.methods ?? []) {
@@ -687,23 +682,23 @@ class RustGenerator extends Generator {
           : '()';
         const methodName = reservedWords(method.name);
 
-        this.code.line(
+        content.push(
           `    pub fn ${methodName}(&self${params ? `, ${params}` : ''}) -> ${returnType} {`,
         );
 
         // Generate better default implementations
         if (returnType === 'String') {
-          this.code.line(`        String::new() // TODO: Call JSII runtime`);
+          content.push(`        String::new() // TODO: Call JSII runtime`);
         } else if (returnType === 'f64') {
-          this.code.line(`        0.0 // TODO: Call JSII runtime`);
+          content.push(`        0.0 // TODO: Call JSII runtime`);
         } else if (returnType === 'bool') {
-          this.code.line(`        false // TODO: Call JSII runtime`);
+          content.push(`        false // TODO: Call JSII runtime`);
         } else {
-          this.code.line(`        todo!("Call JSII runtime")`);
+          content.push(`        todo!("Call JSII runtime")`);
         }
 
-        this.code.line(`    }`);
-        this.code.line('');
+        content.push(`    }`);
+        content.push('');
       }
 
       // All property getters/setters for concrete classes
@@ -711,42 +706,42 @@ class RustGenerator extends Generator {
         const rustType = this.toRustType(prop.type);
         const rustName = reservedWords(prop.name);
 
-        this.code.line(`    pub fn get_${rustName}(&self) -> ${rustType} {`);
+        content.push(`    pub fn get_${rustName}(&self) -> ${rustType} {`);
 
         if (rustType === 'String') {
-          this.code.line(`        String::new() // TODO: Call JSII runtime`);
+          content.push(`        String::new() // TODO: Call JSII runtime`);
         } else if (rustType === 'f64') {
-          this.code.line(`        0.0 // TODO: Call JSII runtime`);
+          content.push(`        0.0 // TODO: Call JSII runtime`);
         } else if (rustType === 'bool') {
-          this.code.line(`        false // TODO: Call JSII runtime`);
+          content.push(`        false // TODO: Call JSII runtime`);
         } else {
-          this.code.line(`        todo!("Call JSII runtime")`);
+          content.push(`        todo!("Call JSII runtime")`);
         }
 
-        this.code.line(`    }`);
+        content.push(`    }`);
 
         if (!prop.immutable) {
-          this.code.line(
+          content.push(
             `    pub fn set_${rustName}(&mut self, value: ${rustType}) {`,
           );
-          this.code.line(`        // TODO: Call JSII runtime to set property`);
-          this.code.line(`    }`);
+          content.push(`        // TODO: Call JSII runtime to set property`);
+          content.push(`    }`);
         }
-        this.code.line('');
+        content.push('');
       }
 
-      this.code.line(`}`);
+      content.push(`}`);
 
       // Generate trait implementations for base class and interfaces
       if (cls.base) {
         const baseTypeName = cls.base.split('.').pop() ?? cls.base;
         const baseTypeInfo = this.getTypeInfo(cls.base);
-        this.code.line('');
+        content.push('');
 
         // Only implement traits for abstract base classes
         // For concrete base classes, we use composition in the struct definition
         if (baseTypeInfo?.abstract) {
-          this.code.line(`impl ${baseTypeName}Abstract for ${cls.name} {`);
+          content.push(`impl ${baseTypeName}Abstract for ${cls.name} {`);
 
           // Get the base class definition to implement its abstract methods
           if (this.currentAssembly?.types) {
@@ -771,12 +766,12 @@ class RustGenerator extends Generator {
                     ? this.toRustType(method.returns.type)
                     : '()';
 
-                  this.code.line(
+                  content.push(
                     `    fn ${methodName}(&self${params ? `, ${params}` : ''}) -> ${returnType} {`,
                   );
-                  this.code.line(`        JsiiRuntime::instance().invoke();`);
-                  this.code.line(`        todo!()`);
-                  this.code.line(`    }`);
+                  content.push(`        JsiiRuntime::instance().invoke();`);
+                  content.push(`        todo!()`);
+                  content.push(`    }`);
                 }
               }
 
@@ -786,27 +781,27 @@ class RustGenerator extends Generator {
                   const rustType = this.toRustType(prop.type);
                   const rustName = reservedWords(prop.name);
 
-                  this.code.line(
+                  content.push(
                     `    fn get_${rustName}(&self) -> ${rustType} {`,
                   );
-                  this.code.line(`        JsiiRuntime::instance().invoke();`);
-                  this.code.line(`        todo!()`);
-                  this.code.line(`    }`);
+                  content.push(`        JsiiRuntime::instance().invoke();`);
+                  content.push(`        todo!()`);
+                  content.push(`    }`);
 
                   if (!prop.immutable) {
-                    this.code.line(
+                    content.push(
                       `    fn set_${rustName}(&mut self, value: ${rustType}) {`,
                     );
-                    this.code.line(`        JsiiRuntime::instance().invoke();`);
-                    this.code.line(`        todo!()`);
-                    this.code.line(`    }`);
+                    content.push(`        JsiiRuntime::instance().invoke();`);
+                    content.push(`        todo!()`);
+                    content.push(`    }`);
                   }
                 }
               }
             }
           }
 
-          this.code.line(`}`);
+          content.push(`}`);
         }
         // Note: For concrete base classes, no impl block is needed - we use composition
       }
@@ -814,8 +809,8 @@ class RustGenerator extends Generator {
       if (cls.interfaces) {
         for (const iface of cls.interfaces) {
           const ifaceName = iface.split('.').pop() ?? iface;
-          this.code.line('');
-          this.code.line(`impl ${ifaceName} for ${cls.name} {`);
+          content.push('');
+          content.push(`impl ${ifaceName} for ${cls.name} {`);
 
           // Get the interface definition to implement its methods
           if (this.currentAssembly?.types) {
@@ -826,20 +821,18 @@ class RustGenerator extends Generator {
                 const rustType = this.toRustType(prop.type);
                 const rustName = reservedWords(prop.name);
 
-                this.code.line(
-                  `    fn get_${rustName}(&self) -> ${rustType} {`,
-                );
-                this.code.line(`        JsiiRuntime::instance().invoke();`);
-                this.code.line(`        todo!()`);
-                this.code.line(`    }`);
+                content.push(`    fn get_${rustName}(&self) -> ${rustType} {`);
+                content.push(`        JsiiRuntime::instance().invoke();`);
+                content.push(`        todo!()`);
+                content.push(`    }`);
 
                 if (!prop.immutable) {
-                  this.code.line(
+                  content.push(
                     `    fn set_${rustName}(&mut self, value: ${rustType}) {`,
                   );
-                  this.code.line(`        JsiiRuntime::instance().invoke();`);
-                  this.code.line(`        todo!()`);
-                  this.code.line(`    }`);
+                  content.push(`        JsiiRuntime::instance().invoke();`);
+                  content.push(`        todo!()`);
+                  content.push(`    }`);
                 }
               }
 
@@ -861,12 +854,12 @@ class RustGenerator extends Generator {
                   ? this.toRustType(method.returns.type)
                   : '()';
 
-                this.code.line(
+                content.push(
                   `    fn ${methodName}(&self${params ? `, ${params}` : ''}) -> ${returnType} {`,
                 );
-                this.code.line(`        JsiiRuntime::instance().invoke();`);
-                this.code.line(`        todo!()`);
-                this.code.line(`    }`);
+                content.push(`        JsiiRuntime::instance().invoke();`);
+                content.push(`        todo!()`);
+                content.push(`    }`);
               }
             }
           }
@@ -880,63 +873,70 @@ class RustGenerator extends Generator {
 
             // Generate stub implementations for common external interfaces
             if (ifaceName === 'IFriendly') {
-              this.code.line(`    fn hello(&self) -> String {`);
-              this.code.line(`        JsiiRuntime::instance().invoke();`);
-              this.code.line(`        todo!()`);
-              this.code.line(`    }`);
+              content.push(`    fn hello(&self) -> String {`);
+              content.push(`        JsiiRuntime::instance().invoke();`);
+              content.push(`        todo!()`);
+              content.push(`    }`);
             } else if (ifaceName === 'IDoublable') {
-              this.code.line(`    fn double_value(&self) -> f64 {`);
-              this.code.line(`        JsiiRuntime::instance().invoke();`);
-              this.code.line(`        todo!()`);
-              this.code.line(`    }`);
+              content.push(`    fn double_value(&self) -> f64 {`);
+              content.push(`        JsiiRuntime::instance().invoke();`);
+              content.push(`        todo!()`);
+              content.push(`    }`);
             }
           }
 
-          this.code.line(`}`);
+          content.push(`}`);
         }
       }
     }
 
-    this.code.closeFile(`src/${filename}.rs`);
+    this.collectModFileContent(modFilePath, content);
   }
 
   protected onBeginEnum(enm: EnumType): void {
     const conflicts = ((this as any).nameConflicts as Set<string>) || new Set();
 
-    let filename = enm.name;
+    let filename;
     const fullPath = enm.namespace ? `${enm.namespace}.${enm.name}` : enm.name;
 
     if (enm.namespace) {
-      // Replace dots with slashes for proper directory structure
-      const namespacePath = enm.namespace.replace(/\./g, '/');
-      filename = `${namespacePath}/${enm.name}`;
-    } else if (conflicts.has(enm.name)) {
-      // This enum conflicts with a namespace - put it inside the namespace directory
-      filename = `${enm.name}/${enm.name}`;
+      // Handle namespace conflicts by flattening when necessary
+      const namespacePath = this.getConflictFreeNamespacePath(
+        enm.namespace,
+        enm.name,
+      );
+      filename = `${namespacePath}/${enm.name}/mod`;
+    } else {
+      // Root level enums also get their own directory
+      filename = `${enm.name}/mod`;
     }
 
     // Handle conflicts at any namespace level
     if (conflicts.has(fullPath)) {
       // This type conflicts with a namespace - put it in its own subdirectory
       if (enm.namespace) {
-        const namespacePath = enm.namespace.replace(/\./g, '/');
-        filename = `${namespacePath}/${enm.name}/${enm.name}`;
+        const namespacePath = this.getConflictFreeNamespacePath(
+          enm.namespace,
+          enm.name,
+        );
+        filename = `${namespacePath}/${enm.name}/mod`;
       } else {
-        filename = `${enm.name}/${enm.name}`;
+        filename = `${enm.name}/mod`;
       }
     }
 
-    this.code.openFile(`src/${filename}.rs`);
+    const modFilePath = `src/${filename}.rs`;
+    const content: string[] = [];
 
-    this.code.line(`pub enum ${enm.name} {`);
+    content.push(`pub enum ${enm.name} {`);
 
     for (const member of enm.members ?? []) {
-      this.code.line(`${member.name},`);
+      content.push(`${member.name},`);
     }
 
-    this.code.line(`}`);
+    content.push(`}`);
 
-    this.code.closeFile(`src/${filename}.rs`);
+    this.collectModFileContent(modFilePath, content);
   }
 
   private toRustType(type: TypeReference): string {
@@ -1071,65 +1071,77 @@ class RustGenerator extends Generator {
       return null;
     }
 
-    // Handle internal types
+    // Handle internal types - simplified path structure
     if (fqn.startsWith('jsii-calc.')) {
       const parts = fqn.split('.');
       const typeName = parts[parts.length - 1];
-      const namespace = parts.slice(1, -1).join('::');
+      const namespace = parts.slice(1, -1).join('.');
+
+      const typeInfo = this.getTypeInfo(fqn);
 
       if (namespace) {
-        // Type is in a namespace
-        const typeInfo = this.getTypeInfo(fqn);
+        // Use conflict-free namespace path
+        const namespacePath = this.getConflictFreeNamespacePath(
+          namespace,
+          typeName,
+        ).replace(/\//g, '::');
+
         if (typeInfo?.kind === 'interface') {
           if (typeName !== alias) {
-            return `use crate::${namespace}::${typeName}::{${typeName} as ${alias}, ${typeName}Ref as ${alias}Ref};`;
+            return `use crate::${namespacePath}::${typeName}::{${typeName} as ${alias}, ${typeName}Ref as ${alias}Ref};`;
           }
-          return `use crate::${namespace}::${typeName}::{${typeName}, ${typeName}Ref};`;
+          return `use crate::${namespacePath}::${typeName}::{${typeName}, ${typeName}Ref};`;
         } else if (typeInfo?.kind === 'class') {
           if (typeInfo.abstract) {
             if (typeName !== alias) {
-              return `use crate::${namespace}::${typeName}::{${typeName}Abstract as ${alias}Abstract, ${typeName}Base as ${alias}Base};`;
+              return `use crate::${namespacePath}::${typeName}::{${typeName}Abstract as ${alias}Abstract, ${typeName}Base as ${alias}Base};`;
             }
-            return `use crate::${namespace}::${typeName}::{${typeName}Abstract, ${typeName}Base};`;
+            return `use crate::${namespacePath}::${typeName}::{${typeName}Abstract, ${typeName}Base};`;
           }
           if (typeName !== alias) {
-            return `use crate::${namespace}::${typeName}::${typeName} as ${alias};`;
+            return `use crate::${namespacePath}::${typeName}::${typeName} as ${alias};`;
           }
-          return `use crate::${namespace}::${typeName}::${typeName};`;
+          return `use crate::${namespacePath}::${typeName}::${typeName};`;
         } else if (typeInfo?.kind === 'enum') {
           if (typeName !== alias) {
-            return `use crate::${namespace}::${typeName}::${typeName} as ${alias};`;
+            return `use crate::${namespacePath}::${typeName}::${typeName} as ${alias};`;
           }
-          return `use crate::${namespace}::${typeName}::${typeName};`;
+          return `use crate::${namespacePath}::${typeName}::${typeName};`;
         }
-      } else {
-        // Type is at root level
-        const typeInfo = this.getTypeInfo(fqn);
-        if (typeInfo?.kind === 'interface') {
-          if (typeName !== alias) {
-            return `use crate::${typeName}::{${typeName} as ${alias}, ${typeName}Ref as ${alias}Ref};`;
-          }
-          return `use crate::${typeName}::{${typeName}, ${typeName}Ref};`;
+        // Fallback for unknown types
+        if (typeName !== alias) {
+          return `use crate::${namespacePath}::${typeName}::${typeName} as ${alias};`;
         }
-        if (typeInfo?.kind === 'class') {
-          if (typeInfo.abstract) {
-            if (typeName !== alias) {
-              return `use crate::${typeName}::{${typeName}Abstract as ${alias}Abstract, ${typeName}Base as ${alias}Base};`;
-            }
-            return `use crate::${typeName}::{${typeName}Abstract, ${typeName}Base};`;
-          }
-          if (typeName !== alias) {
-            return `use crate::${typeName}::${typeName} as ${alias};`;
-          }
-          return `use crate::${typeName}::${typeName};`;
-        }
-        if (typeInfo?.kind === 'enum') {
-          if (typeName !== alias) {
-            return `use crate::${typeName}::${typeName} as ${alias};`;
-          }
-          return `use crate::${typeName}::${typeName};`;
-        }
+        return `use crate::${namespacePath}::${typeName}::${typeName};`;
       }
+      // Root level types use simplified structure: TypeName
+      if (typeInfo?.kind === 'interface') {
+        if (typeName !== alias) {
+          return `use crate::${typeName}::{${typeName} as ${alias}, ${typeName}Ref as ${alias}Ref};`;
+        }
+        return `use crate::${typeName}::{${typeName}, ${typeName}Ref};`;
+      } else if (typeInfo?.kind === 'class') {
+        if (typeInfo.abstract) {
+          if (typeName !== alias) {
+            return `use crate::${typeName}::{${typeName}Abstract as ${alias}Abstract, ${typeName}Base as ${alias}Base};`;
+          }
+          return `use crate::${typeName}::{${typeName}Abstract, ${typeName}Base};`;
+        }
+        if (typeName !== alias) {
+          return `use crate::${typeName}::${typeName} as ${alias};`;
+        }
+        return `use crate::${typeName}::${typeName};`;
+      } else if (typeInfo?.kind === 'enum') {
+        if (typeName !== alias) {
+          return `use crate::${typeName}::${typeName} as ${alias};`;
+        }
+        return `use crate::${typeName}::${typeName};`;
+      }
+      // Fallback - just import the type from its module
+      if (typeName !== alias) {
+        return `use crate::${typeName}::${typeName} as ${alias};`;
+      }
+      return `use crate::${typeName}::${typeName};`;
     }
 
     return null;
@@ -1157,42 +1169,43 @@ class RustGenerator extends Generator {
       return null;
     }
 
-    // Handle internal types
+    // Handle internal types - simplified path structure
     if (fqn.startsWith('jsii-calc.')) {
       const parts = fqn.split('.');
       const typeName = parts[parts.length - 1];
-      const namespace = parts.slice(1, -1).join('::');
+      const namespace = parts.slice(1, -1).join('.');
+
+      const typeInfo = this.getTypeInfo(fqn);
 
       if (namespace) {
-        // Type is in a namespace - generate proper fully qualified import
-        const typeInfo = this.getTypeInfo(fqn);
+        // Use conflict-free namespace path
+        const namespacePath = this.getConflictFreeNamespacePath(
+          namespace,
+          typeName,
+        ).replace(/\//g, '::');
+
         if (typeInfo?.kind === 'interface') {
-          // Import both the trait and the reference implementation with full path
-          return `use crate::${namespace}::${typeName}::{${typeName}, ${typeName}Ref};`;
+          return `use crate::${namespacePath}::${typeName}::{${typeName}, ${typeName}Ref};`;
         } else if (typeInfo?.kind === 'class') {
           if (typeInfo.abstract) {
-            return `use crate::${namespace}::${typeName}::{${typeName}Abstract, ${typeName}Base};`;
+            return `use crate::${namespacePath}::${typeName}::{${typeName}Abstract, ${typeName}Base};`;
           }
-          return `use crate::${namespace}::${typeName}::${typeName};`;
+          return `use crate::${namespacePath}::${typeName}::${typeName};`;
         } else if (typeInfo?.kind === 'enum') {
-          return `use crate::${namespace}::${typeName}::${typeName};`;
+          return `use crate::${namespacePath}::${typeName}::${typeName};`;
         }
         // Fallback for unknown types
-        return `use crate::${namespace}::${typeName}::${typeName};`;
+        return `use crate::${namespacePath}::${typeName}::${typeName};`;
       }
-      // Type is at root level - import the actual type from its module
-      const typeInfo = this.getTypeInfo(fqn);
+      // Root level types use simplified structure: TypeName
       if (typeInfo?.kind === 'interface') {
-        // Import both the trait and the reference implementation
         return `use crate::${typeName}::{${typeName}, ${typeName}Ref};`;
-      }
-      if (typeInfo?.kind === 'class') {
+      } else if (typeInfo?.kind === 'class') {
         if (typeInfo.abstract) {
           return `use crate::${typeName}::{${typeName}Abstract, ${typeName}Base};`;
         }
         return `use crate::${typeName}::${typeName};`;
-      }
-      if (typeInfo?.kind === 'enum') {
+      } else if (typeInfo?.kind === 'enum') {
         return `use crate::${typeName}::${typeName};`;
       }
       // Fallback - just import the type from its module
@@ -1278,106 +1291,100 @@ class RustGenerator extends Generator {
   }
 
   private generateModuleFiles(nestedModules: Map<string, Set<string>>): void {
-    const conflicts = ((this as any).nameConflicts as Set<string>) || new Set();
-
-    // Generate mod.rs files for each namespace
+    // Collect content for mod.rs files instead of writing directly
     for (const [namespace, children] of nestedModules.entries()) {
-      const modulePath = namespace.replace(/\./g, '/');
-      this.code.openFile(`src/${modulePath}/mod.rs`);
+      const modulePath = this.getConflictFreeNamespacePath(namespace, '');
+      const modFilePath = `src/${modulePath}/mod.rs`;
+      const content: string[] = [];
 
-      // Add module declarations for all children
+      // Add module declarations for child modules
       const sortedChildren = Array.from(children).sort();
       for (const child of sortedChildren) {
-        this.code.line(`pub mod ${child};`);
+        content.push(`pub mod ${child};`);
       }
 
       // Add re-exports for types in this namespace
-      this.code.line('');
-      this.code.line('// Re-export types from child modules');
-      for (const child of sortedChildren) {
-        // Check if this child is a type or a submodule
-        const fullPath = `${namespace}.${child}`;
-        const isType = this.isTypeName(fullPath);
+      if (sortedChildren.length > 0) {
+        content.push('');
+        content.push('// Re-export types from child modules');
+        for (const child of sortedChildren) {
+          // Check if this child is a type or a submodule
+          const fullPath = `${namespace}.${child}`;
+          const isType = this.isTypeName(fullPath);
 
-        if (isType) {
-          // Re-export the type
-          const typeInfo = this.getTypeInfo(fullPath);
-          if (typeInfo) {
-            if (typeInfo.kind === 'interface') {
-              this.code.line(`pub use ${child}::{${child}, ${child}Ref};`);
-            } else if (typeInfo.kind === 'class') {
-              if (typeInfo.abstract) {
-                // Re-export all abstract class types
-                this.code.line(
-                  `pub use ${child}::{${child}Abstract, ${child}Base, ${child}};`,
-                );
-              } else {
-                this.code.line(`pub use ${child}::${child};`);
+          if (isType) {
+            // Re-export the type - simplified since everything is in mod.rs now
+            const typeInfo = this.getTypeInfo(fullPath);
+            if (typeInfo) {
+              if (typeInfo.kind === 'interface') {
+                content.push(`pub use ${child}::{${child}, ${child}Ref};`);
+              } else if (typeInfo.kind === 'class') {
+                if (typeInfo.abstract) {
+                  content.push(
+                    `pub use ${child}::{${child}Abstract, ${child}Base};`,
+                  );
+                } else {
+                  content.push(`pub use ${child}::${child};`);
+                }
+              } else if (typeInfo.kind === 'enum') {
+                content.push(`pub use ${child}::${child};`);
               }
-            } else if (typeInfo.kind === 'enum') {
-              this.code.line(`pub use ${child}::${child};`);
             }
           }
         }
       }
 
-      this.code.closeFile(`src/${modulePath}/mod.rs`);
+      this.collectModFileContent(modFilePath, content);
     }
 
-    // Generate mod.rs files for conflicting types at any level
-    for (const conflictPath of conflicts) {
-      const parts = conflictPath.split('.');
-      const typeName = parts[parts.length - 1];
+    // Also handle types that may be placed in flattened paths due to conflicts
+    // We need to ensure all types are properly declared in accessible module files
+    for (const type of Object.values(this.currentAssembly?.types ?? {})) {
+      if (
+        type.kind === TypeKind.Interface ||
+        type.kind === TypeKind.Class ||
+        type.kind === TypeKind.Enum
+      ) {
+        if (type.namespace) {
+          const conflictFreePath = this.getConflictFreeNamespacePath(
+            type.namespace,
+            type.name,
+          );
+          const originalPath = type.namespace.replace(/\./g, '/');
 
-      if (parts.length === 1) {
-        // Root-level conflict
-        this.code.openFile(`src/${typeName}/mod.rs`);
-        this.code.line(`pub mod ${typeName};`);
-        // Add re-export
-        const typeInfo = this.getTypeInfo(conflictPath);
-        if (typeInfo) {
-          if (typeInfo.kind === 'interface') {
-            this.code.line(
-              `pub use ${typeName}::{${typeName}, ${typeName}Ref};`,
-            );
-          } else if (typeInfo.kind === 'class') {
-            if (typeInfo.abstract) {
-              this.code.line(
-                `pub use ${typeName}::{${typeName}Abstract, ${typeName}Base, ${typeName}};`,
-              );
-            } else {
-              this.code.line(`pub use ${typeName}::${typeName};`);
+          // If the conflict-free path is different from the original path,
+          // we need to ensure the type is declared in the accessible path
+          if (conflictFreePath !== originalPath) {
+            // Check if we need to create an additional mod.rs file
+            if (conflictFreePath !== '') {
+              const modFilePath = `src/${conflictFreePath}/mod.rs`;
+              // Only add if not already added by the main loop
+              if (!nestedModules.has(conflictFreePath.replace(/\//g, '.'))) {
+                const content: string[] = [];
+                content.push(`pub mod ${type.name};`);
+
+                // Add re-export
+                if (type.kind === TypeKind.Interface) {
+                  content.push(
+                    `pub use ${type.name}::{${type.name}, ${type.name}Ref};`,
+                  );
+                } else if (type.kind === TypeKind.Class) {
+                  if (type.abstract) {
+                    content.push(
+                      `pub use ${type.name}::{${type.name}Abstract, ${type.name}Base};`,
+                    );
+                  } else {
+                    content.push(`pub use ${type.name}::${type.name};`);
+                  }
+                } else if (type.kind === TypeKind.Enum) {
+                  content.push(`pub use ${type.name}::${type.name};`);
+                }
+
+                this.collectModFileContent(modFilePath, content);
+              }
             }
-          } else if (typeInfo.kind === 'enum') {
-            this.code.line(`pub use ${typeName}::${typeName};`);
           }
         }
-        this.code.closeFile(`src/${typeName}/mod.rs`);
-      } else {
-        // Namespace-level conflict
-        const namespacePath = parts.slice(0, -1).join('/');
-        this.code.openFile(`src/${namespacePath}/${typeName}/mod.rs`);
-        this.code.line(`pub mod ${typeName};`);
-        // Add re-export
-        const typeInfo = this.getTypeInfo(conflictPath);
-        if (typeInfo) {
-          if (typeInfo.kind === 'interface') {
-            this.code.line(
-              `pub use ${typeName}::{${typeName}, ${typeName}Ref};`,
-            );
-          } else if (typeInfo.kind === 'class') {
-            if (typeInfo.abstract) {
-              this.code.line(
-                `pub use ${typeName}::{${typeName}Abstract, ${typeName}Base, ${typeName}};`,
-              );
-            } else {
-              this.code.line(`pub use ${typeName}::${typeName};`);
-            }
-          } else if (typeInfo.kind === 'enum') {
-            this.code.line(`pub use ${typeName}::${typeName};`);
-          }
-        }
-        this.code.closeFile(`src/${namespacePath}/${typeName}/mod.rs`);
       }
     }
   }
@@ -1407,35 +1414,54 @@ class RustGenerator extends Generator {
     return null;
   }
 
-  // private _getImportsForTypeReference(
-  //   _typeRef: TypeReference,
-  //   _currentType: InterfaceType | ClassType,
-  // ): string[] {
-  //   const imports: string[] = [];
+  private getConflictFreeNamespacePath(
+    namespace: string,
+    _typeName: string,
+  ): string {
+    const conflicts = ((this as any).nameConflicts as Set<string>) || new Set();
 
-  //   if (isNamedTypeReference(_typeRef)) {
-  //     const importStmt = this.getImportForFqn(_typeRef.fqn, _currentType);
-  //     if (importStmt) {
-  //       imports.push(importStmt);
-  //     }
-  //   } else if (isCollectionTypeReference(_typeRef)) {
-  //     const elementImports = this._getImportsForTypeReference(
-  //       _typeRef.collection.elementtype,
-  //       _currentType,
-  //     );
-  //     imports.push(...elementImports);
-  //   } else if (isUnionTypeReference(_typeRef)) {
-  //     for (const unionType of _typeRef.union.types) {
-  //       const unionImports = this._getImportsForTypeReference(
-  //         unionType,
-  //         _currentType,
-  //       );
-  //       imports.push(...unionImports);
-  //     }
-  //   }
+    // Split the namespace into parts
+    const namespaceParts = namespace.split('.');
+    const result: string[] = [];
 
-  //   return imports;
-  // }
+    // Check each namespace part to see if it conflicts with a type name
+    for (let i = 0; i < namespaceParts.length; i++) {
+      const currentPart = namespaceParts[i];
+      const partialNamespace = namespaceParts.slice(0, i + 1).join('.');
+
+      // Check if this namespace part conflicts with a type name
+      if (conflicts.has(partialNamespace)) {
+        // Skip this part to avoid filesystem conflict
+        continue;
+      }
+
+      result.push(currentPart);
+    }
+
+    // If we skipped all parts, use the flattened name
+    if (result.length === 0) {
+      return namespace.replace(/\./g, '');
+    }
+
+    return result.join('/');
+  }
+
+  private collectModFileContent(path: string, content: string[]) {
+    if (!this.modFileContents.has(path)) {
+      this.modFileContents.set(path, []);
+    }
+    this.modFileContents.get(path)!.push(...content);
+  }
+
+  private writeAllModFiles() {
+    for (const [path, lines] of this.modFileContents) {
+      this.code.openFile(path);
+      for (const line of lines) {
+        this.code.line(line);
+      }
+      this.code.closeFile(path);
+    }
+  }
 }
 
 function toRustType(
