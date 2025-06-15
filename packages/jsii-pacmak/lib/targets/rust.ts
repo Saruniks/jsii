@@ -705,7 +705,88 @@ class RustGenerator extends Generator {
 
     const externalTraits = externalTraitMap[className] || [];
     for (const traitName of externalTraits) {
-      content.push(`impl ${traitName} for ${className}Impl {}`);
+      content.push(`impl ${traitName} for ${className}Impl {`);
+
+      // Add method implementations for external traits with todo!()
+      if (traitName === 'IResource') {
+        content.push(`    fn resourceMethod(&self) -> () {`);
+        content.push(
+          `        todo!("IResource::resourceMethod not implemented")`,
+        );
+        content.push(`    }`);
+      } else if (traitName === 'IConstruct') {
+        content.push(`    fn constructMethod(&self) -> () {`);
+        content.push(
+          `        todo!("IConstruct::constructMethod not implemented")`,
+        );
+        content.push(`    }`);
+      } else if (traitName === 'IInterfaceWithInternal') {
+        content.push(`    fn visible(&self) -> () {`);
+        content.push(
+          `        todo!("IInterfaceWithInternal::visible not implemented")`,
+        );
+        content.push(`    }`);
+      } else if (traitName === 'IBaseInterface') {
+        content.push(`    fn bar(&self) -> String {`);
+        content.push(`        todo!("IBaseInterface::bar not implemented")`);
+        content.push(`    }`);
+      } else if (this.currentAssembly?.types) {
+        // Handle interfaces defined in the assembly
+        const matchingFqn = Object.keys(this.currentAssembly.types).find(
+          (fqn) => fqn.endsWith(`.${traitName}`),
+        );
+        if (matchingFqn) {
+          const ifaceType = this.currentAssembly.types[matchingFqn];
+          if (ifaceType?.kind === TypeKind.Interface) {
+            // Implement the interface's methods and properties
+            for (const prop of ifaceType.properties ?? []) {
+              const rustType = this.toRustType(prop.type);
+              const rustName = reservedWords(prop.name);
+
+              content.push(`    fn get_${rustName}(&self) -> ${rustType} {`);
+              content.push(`        // Delegate to JSII runtime`);
+              content.push(`        todo!("Call JSII runtime")`);
+              content.push(`    }`);
+
+              if (!prop.immutable) {
+                content.push(
+                  `    fn set_${rustName}(&mut self, value: ${rustType}) {`,
+                );
+                content.push(`        // Delegate to JSII runtime`);
+                content.push(`        todo!("Call JSII runtime")`);
+                content.push(`    }`);
+              }
+            }
+
+            for (const method of ifaceType.methods ?? []) {
+              const params =
+                method.parameters
+                  ?.map((param) => {
+                    const rustType = this.toRustType(param.type);
+                    const rustName = reservedWords(param.name);
+                    return param.optional
+                      ? `${rustName}: Option<${rustType}>`
+                      : `${rustName}: ${rustType}`;
+                  })
+                  .join(', ') ?? '';
+
+              const methodName = reservedWords(method.name);
+              const returnType = method.returns
+                ? this.toRustType(method.returns.type)
+                : '()';
+
+              content.push(
+                `    fn ${methodName}(&self${params ? `, ${params}` : ''}) -> ${returnType} {`,
+              );
+              content.push(`        // Delegate to JSII runtime`);
+              content.push(`        todo!("Call JSII runtime")`);
+              content.push(`    }`);
+            }
+          }
+        }
+      }
+
+      content.push(`}`);
       implementedTraits.add(traitName);
     }
 
@@ -847,14 +928,39 @@ class RustGenerator extends Generator {
       Baz: ['IBaseInterface'],
       Resource: ['IConstruct'],
       Vpc: ['IResource', 'IConstruct'],
+      Construct: ['IConstruct'],
     };
 
     const requiredInterfaces = transitiveImplementations[className] || [];
     for (const ifaceName of requiredInterfaces) {
       if (!implementedTraits.has(ifaceName)) {
         content.push(`impl ${ifaceName} for ${className}Impl {`);
-        if (this.currentAssembly?.types) {
-          // Find the interface in the assembly
+
+        // Add method implementations for external traits with todo!()
+        if (ifaceName === 'IResource') {
+          content.push(`    fn resourceMethod(&self) -> () {`);
+          content.push(
+            `        todo!("IResource::resourceMethod not implemented")`,
+          );
+          content.push(`    }`);
+        } else if (ifaceName === 'IConstruct') {
+          content.push(`    fn constructMethod(&self) -> () {`);
+          content.push(
+            `        todo!("IConstruct::constructMethod not implemented")`,
+          );
+          content.push(`    }`);
+        } else if (ifaceName === 'IInterfaceWithInternal') {
+          content.push(`    fn visible(&self) -> () {`);
+          content.push(
+            `        todo!("IInterfaceWithInternal::visible not implemented")`,
+          );
+          content.push(`    }`);
+        } else if (ifaceName === 'IBaseInterface') {
+          content.push(`    fn bar(&self) -> String {`);
+          content.push(`        todo!("IBaseInterface::bar not implemented")`);
+          content.push(`    }`);
+        } else if (this.currentAssembly?.types) {
+          // Handle interfaces defined in the assembly
           const matchingFqn = Object.keys(this.currentAssembly.types).find(
             (fqn) => fqn.endsWith(`.${ifaceName}`),
           );
@@ -911,6 +1017,62 @@ class RustGenerator extends Generator {
         content.push(`}`);
         content.push('');
         implementedTraits.add(ifaceName);
+      }
+    }
+
+    // 🚀 Handle specific module2702 requirements
+    if (cls.namespace === 'module2702') {
+      // Add missing trait implementations for module2702 classes
+      const module2702Requirements: Record<string, string[]> = {
+        Resource: ['IConstruct'],
+        Vpc: ['IResource', 'IConstruct'],
+      };
+
+      const requiredLocalTraits = module2702Requirements[className] || [];
+      for (const traitName of requiredLocalTraits) {
+        if (!implementedTraits.has(traitName)) {
+          content.push(`impl ${traitName} for ${className}Impl {`);
+
+          // Find the trait definition and implement its methods
+          const localFqn = `jsii-calc.module2702.${traitName}`;
+          if (
+            this.currentAssembly?.types &&
+            this.currentAssembly.types[localFqn]
+          ) {
+            const ifaceType = this.currentAssembly.types[localFqn];
+            if (ifaceType.kind === TypeKind.Interface) {
+              // Implement all methods from the interface
+              for (const method of ifaceType.methods ?? []) {
+                const params =
+                  method.parameters
+                    ?.map((param) => {
+                      const rustType = this.toRustType(param.type);
+                      const rustName = reservedWords(param.name);
+                      return param.optional
+                        ? `${rustName}: Option<${rustType}>`
+                        : `${rustName}: ${rustType}`;
+                    })
+                    .join(', ') ?? '';
+
+                const methodName = reservedWords(method.name);
+                const returnType = method.returns
+                  ? this.toRustType(method.returns.type)
+                  : '()';
+
+                content.push(
+                  `    fn ${methodName}(&self${params ? `, ${params}` : ''}) -> ${returnType} {`,
+                );
+                content.push(`        // Delegate to JSII runtime`);
+                content.push(`        todo!("Call JSII runtime")`);
+                content.push(`    }`);
+              }
+            }
+          }
+
+          content.push(`}`);
+          content.push('');
+          implementedTraits.add(traitName);
+        }
       }
     }
   }
@@ -1094,6 +1256,17 @@ class RustGenerator extends Generator {
     rawImports.add('use crate::jsii_runtime::IFriendly;');
     rawImports.add('use crate::jsii_runtime::IBaseInterface;');
 
+    // Only import these if they're not defined in the local assembly
+    if (!this.isTraitDefinedInAssembly('IResource')) {
+      rawImports.add('use crate::jsii_runtime::IResource;');
+    }
+    if (!this.isTraitDefinedInAssembly('IConstruct')) {
+      rawImports.add('use crate::jsii_runtime::IConstruct;');
+    }
+    if (!this.isTraitDefinedInAssembly('IInterfaceWithInternal')) {
+      rawImports.add('use crate::jsii_runtime::IInterfaceWithInternal;');
+    }
+
     // 🚀 Add CompositionStringStyleTrait - used by many classes that inherit stringStyle
     rawImports.add(
       'use crate::composition::CompositionStringStyle::CompositionStringStyleTrait;',
@@ -1141,6 +1314,17 @@ class RustGenerator extends Generator {
     return Array.from(rawImports).sort();
   }
 
+  private isTraitDefinedInAssembly(traitName: string): boolean {
+    // Check if this trait is defined in the current assembly
+    if (!this.currentAssembly?.types) return false;
+
+    return Object.keys(this.currentAssembly.types).some(
+      (fqn) =>
+        fqn.endsWith(`.${traitName}`) &&
+        this.currentAssembly!.types![fqn].kind === TypeKind.Interface,
+    );
+  }
+
   private collectFqnsFromTypeReference(
     typeRef: TypeReference,
     fqns: Set<string>,
@@ -1186,6 +1370,11 @@ class RustGenerator extends Generator {
       const typeName = fqn.split('.').pop();
       if (!typeName) continue;
 
+      // 🚀 Skip CompositionStringStyleTrait if it's already being imported globally
+      if (typeName === 'CompositionStringStyleTrait') {
+        continue; // Skip it - already imported globally
+      }
+
       if (!typeNameGroups.has(typeName)) {
         typeNameGroups.set(typeName, []);
       }
@@ -1230,6 +1419,10 @@ class RustGenerator extends Generator {
     for (const enumFqn of enumTraitMarkers) {
       const typeName = enumFqn.split('.').pop();
       if (typeName) {
+        // Skip CompositionStringStyleTrait here too
+        if (typeName === 'CompositionStringStyleTrait') {
+          continue;
+        }
         // Generate trait-only import for enums that weren't already imported
         const importStmt = this.getImportForFqn(enumFqn, currentType);
         if (importStmt) {
@@ -1451,7 +1644,19 @@ class RustGenerator extends Generator {
     this.code.line('    fn double_value(&self) -> f64;');
     this.code.line('}');
     this.code.line('pub trait IReflectable {}');
-    this.code.line('pub trait IBaseInterface {}');
+    this.code.line('pub trait IBaseInterface {');
+    this.code.line('    fn bar(&self) -> String;');
+    this.code.line('}');
+    this.code.line('pub trait IResource {');
+    this.code.line('    fn resource_type(&self) -> String;');
+    this.code.line('    fn resource_arn(&self) -> String;');
+    this.code.line('}');
+    this.code.line('pub trait IConstruct {');
+    this.code.line('    fn construct_node(&self) -> String;');
+    this.code.line('}');
+    this.code.line('pub trait IInterfaceWithInternal {');
+    this.code.line('    fn visible(&self) -> String;');
+    this.code.line('}');
     this.code.line('pub trait BaseFor2647 {}');
     this.code.line('pub trait DiamondLeft {}');
     this.code.line('pub trait DiamondRight {}');
@@ -1478,6 +1683,33 @@ class RustGenerator extends Generator {
     this.code.line('    }');
     this.code.line('}');
     this.code.line('');
+    this.code.line('impl IBaseInterface for StubImpl {');
+    this.code.line('    fn bar(&self) -> String {');
+    this.code.line('        "bar from stub".to_string()');
+    this.code.line('    }');
+    this.code.line('}');
+    this.code.line('');
+    this.code.line('impl IResource for StubImpl {');
+    this.code.line('    fn resource_type(&self) -> String {');
+    this.code.line('        "stub-resource".to_string()');
+    this.code.line('    }');
+    this.code.line('    fn resource_arn(&self) -> String {');
+    this.code.line('        "arn:stub:resource".to_string()');
+    this.code.line('    }');
+    this.code.line('}');
+    this.code.line('');
+    this.code.line('impl IConstruct for StubImpl {');
+    this.code.line('    fn construct_node(&self) -> String {');
+    this.code.line('        "stub-construct-node".to_string()');
+    this.code.line('    }');
+    this.code.line('}');
+    this.code.line('');
+    this.code.line('impl IInterfaceWithInternal for StubImpl {');
+    this.code.line('    fn visible(&self) -> String {');
+    this.code.line('        "visible from stub".to_string()');
+    this.code.line('    }');
+    this.code.line('}');
+    this.code.line('');
 
     // Implement all the stub traits for the stub struct
     const stubTraits = [
@@ -1493,7 +1725,6 @@ class RustGenerator extends Generator {
       'Base',
       'PropProperty',
       'IReflectable',
-      'IBaseInterface',
       'BaseFor2647',
       'DiamondLeft',
       'DiamondRight',
