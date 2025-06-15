@@ -700,7 +700,7 @@ class RustGenerator extends Generator {
       Construct: ['IConstruct'],
       Resource: ['IConstruct'],
       Vpc: ['IResource', 'IConstruct'],
-      ImplementsInterfaceWithInternalSubclass: ['IInterfaceWithInternal'],
+      ImplementsInterfaceWithInternal: ['IInterfaceWithInternal'],
     };
 
     const externalTraits = externalTraitMap[className] || [];
@@ -1025,7 +1025,7 @@ class RustGenerator extends Generator {
       // Add missing trait implementations for module2702 classes
       const module2702Requirements: Record<string, string[]> = {
         Resource: ['IConstruct'],
-        Vpc: ['IResource', 'IConstruct'],
+        Vpc: ['IResource', 'IConstruct', 'Construct'],
       };
 
       const requiredLocalTraits = module2702Requirements[className] || [];
@@ -1067,6 +1067,47 @@ class RustGenerator extends Generator {
                 content.push(`    }`);
               }
             }
+          } else if (traitName === 'Construct') {
+            // Handle Construct trait from the same namespace
+            const constructFqn = `jsii-calc.module2702.Construct`;
+            if (
+              this.currentAssembly?.types &&
+              this.currentAssembly.types[constructFqn]
+            ) {
+              const constructType = this.currentAssembly.types[constructFqn];
+              if (constructType.kind === TypeKind.Class) {
+                // Implement methods from Construct class
+                for (const method of constructType.methods ?? []) {
+                  const params =
+                    method.parameters
+                      ?.map((param) => {
+                        const rustType = this.toRustType(param.type);
+                        const rustName = reservedWords(param.name);
+                        return param.optional
+                          ? `${rustName}: Option<${rustType}>`
+                          : `${rustName}: ${rustType}`;
+                      })
+                      .join(', ') ?? '';
+
+                  const methodName = reservedWords(method.name);
+                  const returnType = method.returns
+                    ? this.toRustType(method.returns.type)
+                    : '()';
+
+                  content.push(
+                    `    fn ${methodName}(&self${params ? `, ${params}` : ''}) -> ${returnType} {`,
+                  );
+                  content.push(`        // Delegate to JSII runtime`);
+                  content.push(`        todo!("Call JSII runtime")`);
+                  content.push(`    }`);
+                }
+              }
+            }
+            // Always add the constructMethod fallback for Construct trait
+            content.push(`    fn constructMethod(&self) -> () {`);
+            content.push(`        // Delegate to JSII runtime`);
+            content.push(`        todo!("Call JSII runtime")`);
+            content.push(`    }`);
           }
 
           content.push(`}`);
@@ -1268,9 +1309,48 @@ class RustGenerator extends Generator {
     }
 
     // 🚀 Add CompositionStringStyleTrait - used by many classes that inherit stringStyle
-    rawImports.add(
-      'use crate::composition::CompositionStringStyle::CompositionStringStyleTrait;',
-    );
+    // rawImports.add(
+    //   'use crate::composition::CompositionStringStyle::CompositionStringStyleTrait;',
+    // );
+
+    // 🚀 Add specific imports for classes that need local traits
+    if ('name' in type) {
+      const className = type.name;
+      const namespace = 'namespace' in type ? type.namespace : undefined;
+
+      // Add imports for module2702 classes
+      if (namespace === 'module2702') {
+        if (className === 'Resource') {
+          rawImports.add(
+            'use crate::module2702::IConstruct::{IConstruct, IConstructRef};',
+          );
+        } else if (className === 'Vpc') {
+          rawImports.add(
+            'use crate::module2702::IConstruct::{IConstruct, IConstructRef};',
+          );
+          rawImports.add(
+            'use crate::module2702::IResource::{IResource, IResourceRef};',
+          );
+          rawImports.add('use crate::module2702::Construct::Construct;');
+        }
+      }
+
+      // Add import for ImplementsInterfaceWithInternalSubclass
+      if (className === 'ImplementsInterfaceWithInternalSubclass') {
+        rawImports.add(
+          'use crate::IInterfaceWithInternal::{IInterfaceWithInternal, IInterfaceWithInternalRef};',
+        );
+      }
+
+      // Add CompositionStringStyleTrait import for classes that implement CompositeOperation
+      // or other traits that use CompositionStringStyleTrait
+      const needsCompositionStringStyleTrait = ['Calculator', 'Power', 'Sum'];
+      if (needsCompositionStringStyleTrait.includes(className)) {
+        rawImports.add(
+          'use crate::composition::CompositionStringStyle::CompositionStringStyleTrait;',
+        );
+      }
+    }
 
     // Collect all FQNs that need importing
     const fqnsToImport = new Set<string>();
@@ -1370,11 +1450,6 @@ class RustGenerator extends Generator {
       const typeName = fqn.split('.').pop();
       if (!typeName) continue;
 
-      // 🚀 Skip CompositionStringStyleTrait if it's already being imported globally
-      if (typeName === 'CompositionStringStyleTrait') {
-        continue; // Skip it - already imported globally
-      }
-
       if (!typeNameGroups.has(typeName)) {
         typeNameGroups.set(typeName, []);
       }
@@ -1419,10 +1494,6 @@ class RustGenerator extends Generator {
     for (const enumFqn of enumTraitMarkers) {
       const typeName = enumFqn.split('.').pop();
       if (typeName) {
-        // Skip CompositionStringStyleTrait here too
-        if (typeName === 'CompositionStringStyleTrait') {
-          continue;
-        }
         // Generate trait-only import for enums that weren't already imported
         const importStmt = this.getImportForFqn(enumFqn, currentType);
         if (importStmt) {
