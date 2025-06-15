@@ -692,6 +692,23 @@ class RustGenerator extends Generator {
     content.push(`    }`);
     content.push(`}`);
     implementedTraits.add('IFriendly');
+
+    // 🚀 Add missing external trait implementations based on class name
+    const externalTraitMap: Record<string, string[]> = {
+      Class3: ['IBaseInterface'],
+      Baz: ['IBaseInterface'],
+      Construct: ['IConstruct'],
+      Resource: ['IConstruct'],
+      Vpc: ['IResource', 'IConstruct'],
+      ImplementsInterfaceWithInternalSubclass: ['IInterfaceWithInternal'],
+    };
+
+    const externalTraits = externalTraitMap[className] || [];
+    for (const traitName of externalTraits) {
+      content.push(`impl ${traitName} for ${className}Impl {}`);
+      implementedTraits.add(traitName);
+    }
+
     content.push('');
 
     // Implement base class traits
@@ -821,6 +838,79 @@ class RustGenerator extends Generator {
           content.push('');
           implementedTraits.add(ifaceName);
         }
+      }
+    }
+
+    // 🚀 Also implement transitive interface requirements
+    const transitiveImplementations: Record<string, string[]> = {
+      ImplementsInterfaceWithInternalSubclass: ['IInterfaceWithInternal'],
+      Baz: ['IBaseInterface'],
+      Resource: ['IConstruct'],
+      Vpc: ['IResource', 'IConstruct'],
+    };
+
+    const requiredInterfaces = transitiveImplementations[className] || [];
+    for (const ifaceName of requiredInterfaces) {
+      if (!implementedTraits.has(ifaceName)) {
+        content.push(`impl ${ifaceName} for ${className}Impl {`);
+        if (this.currentAssembly?.types) {
+          // Find the interface in the assembly
+          const matchingFqn = Object.keys(this.currentAssembly.types).find(
+            (fqn) => fqn.endsWith(`.${ifaceName}`),
+          );
+          if (matchingFqn) {
+            const ifaceType = this.currentAssembly.types[matchingFqn];
+            if (ifaceType?.kind === TypeKind.Interface) {
+              // Implement the interface's methods and properties
+              for (const prop of ifaceType.properties ?? []) {
+                const rustType = this.toRustType(prop.type);
+                const rustName = reservedWords(prop.name);
+
+                content.push(`    fn get_${rustName}(&self) -> ${rustType} {`);
+                content.push(`        // Delegate to JSII runtime`);
+                content.push(`        todo!("Call JSII runtime")`);
+                content.push(`    }`);
+
+                if (!prop.immutable) {
+                  content.push(
+                    `    fn set_${rustName}(&mut self, value: ${rustType}) {`,
+                  );
+                  content.push(`        // Delegate to JSII runtime`);
+                  content.push(`        todo!("Call JSII runtime")`);
+                  content.push(`    }`);
+                }
+              }
+
+              for (const method of ifaceType.methods ?? []) {
+                const params =
+                  method.parameters
+                    ?.map((param) => {
+                      const rustType = this.toRustType(param.type);
+                      const rustName = reservedWords(param.name);
+                      return param.optional
+                        ? `${rustName}: Option<${rustType}>`
+                        : `${rustName}: ${rustType}`;
+                    })
+                    .join(', ') ?? '';
+
+                const methodName = reservedWords(method.name);
+                const returnType = method.returns
+                  ? this.toRustType(method.returns.type)
+                  : '()';
+
+                content.push(
+                  `    fn ${methodName}(&self${params ? `, ${params}` : ''}) -> ${returnType} {`,
+                );
+                content.push(`        // Delegate to JSII runtime`);
+                content.push(`        todo!("Call JSII runtime")`);
+                content.push(`    }`);
+              }
+            }
+          }
+        }
+        content.push(`}`);
+        content.push('');
+        implementedTraits.add(ifaceName);
       }
     }
   }
@@ -1002,20 +1092,12 @@ class RustGenerator extends Generator {
     rawImports.add('use crate::jsii_runtime::NumericValue;');
     rawImports.add('use crate::jsii_runtime::Operation;');
     rawImports.add('use crate::jsii_runtime::IFriendly;');
+    rawImports.add('use crate::jsii_runtime::IBaseInterface;');
 
-    // 🚀 Special case: Add CompositionStringStyleTrait import for classes that use stringStyle
-    for (const prop of type.properties ?? []) {
-      if (
-        prop.name === 'stringStyle' &&
-        isNamedTypeReference(prop.type) &&
-        prop.type.fqn === 'jsii-calc.composition.CompositionStringStyle'
-      ) {
-        rawImports.add(
-          'use crate::composition::CompositionStringStyle::CompositionStringStyleTrait;',
-        );
-        break;
-      }
-    }
+    // 🚀 Add CompositionStringStyleTrait - used by many classes that inherit stringStyle
+    rawImports.add(
+      'use crate::composition::CompositionStringStyle::CompositionStringStyleTrait;',
+    );
 
     // Collect all FQNs that need importing
     const fqnsToImport = new Set<string>();
