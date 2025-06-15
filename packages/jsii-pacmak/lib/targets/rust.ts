@@ -1035,14 +1035,15 @@ class RustGenerator extends Generator {
 
           // Find the trait definition and implement its methods
           const localFqn = `jsii-calc.module2702.${traitName}`;
+          let hasConstructMethod = false;
           if (
             this.currentAssembly?.types &&
             this.currentAssembly.types[localFqn]
           ) {
-            const ifaceType = this.currentAssembly.types[localFqn];
-            if (ifaceType.kind === TypeKind.Interface) {
+            const typeSpec = this.currentAssembly.types[localFqn];
+            if (typeSpec.kind === TypeKind.Interface) {
               // Implement all methods from the interface
-              for (const method of ifaceType.methods ?? []) {
+              for (const method of typeSpec.methods ?? []) {
                 const params =
                   method.parameters
                     ?.map((param) => {
@@ -1059,6 +1060,40 @@ class RustGenerator extends Generator {
                   ? this.toRustType(method.returns.type)
                   : '()';
 
+                if (methodName === 'constructMethod') {
+                  hasConstructMethod = true;
+                }
+
+                content.push(
+                  `    fn ${methodName}(&self${params ? `, ${params}` : ''}) -> ${returnType} {`,
+                );
+                content.push(`        // Delegate to JSII runtime`);
+                content.push(`        todo!("Call JSII runtime")`);
+                content.push(`    }`);
+              }
+            } else if (typeSpec.kind === TypeKind.Class) {
+              // Handle class-based traits (like Construct)
+              for (const method of typeSpec.methods ?? []) {
+                const params =
+                  method.parameters
+                    ?.map((param) => {
+                      const rustType = this.toRustType(param.type);
+                      const rustName = reservedWords(param.name);
+                      return param.optional
+                        ? `${rustName}: Option<${rustType}>`
+                        : `${rustName}: ${rustType}`;
+                    })
+                    .join(', ') ?? '';
+
+                const methodName = reservedWords(method.name);
+                const returnType = method.returns
+                  ? this.toRustType(method.returns.type)
+                  : '()';
+
+                if (methodName === 'constructMethod') {
+                  hasConstructMethod = true;
+                }
+
                 content.push(
                   `    fn ${methodName}(&self${params ? `, ${params}` : ''}) -> ${returnType} {`,
                 );
@@ -1067,43 +1102,10 @@ class RustGenerator extends Generator {
                 content.push(`    }`);
               }
             }
-          } else if (traitName === 'Construct') {
-            // Handle Construct trait from the same namespace
-            const constructFqn = `jsii-calc.module2702.Construct`;
-            if (
-              this.currentAssembly?.types &&
-              this.currentAssembly.types[constructFqn]
-            ) {
-              const constructType = this.currentAssembly.types[constructFqn];
-              if (constructType.kind === TypeKind.Class) {
-                // Implement methods from Construct class
-                for (const method of constructType.methods ?? []) {
-                  const params =
-                    method.parameters
-                      ?.map((param) => {
-                        const rustType = this.toRustType(param.type);
-                        const rustName = reservedWords(param.name);
-                        return param.optional
-                          ? `${rustName}: Option<${rustType}>`
-                          : `${rustName}: ${rustType}`;
-                      })
-                      .join(', ') ?? '';
+          }
 
-                  const methodName = reservedWords(method.name);
-                  const returnType = method.returns
-                    ? this.toRustType(method.returns.type)
-                    : '()';
-
-                  content.push(
-                    `    fn ${methodName}(&self${params ? `, ${params}` : ''}) -> ${returnType} {`,
-                  );
-                  content.push(`        // Delegate to JSII runtime`);
-                  content.push(`        todo!("Call JSII runtime")`);
-                  content.push(`    }`);
-                }
-              }
-            }
-            // Always add the constructMethod fallback for Construct trait
+          // Special handling for Construct trait - add constructMethod only if not already present
+          if (traitName === 'Construct' && !hasConstructMethod) {
             content.push(`    fn constructMethod(&self) -> () {`);
             content.push(`        // Delegate to JSII runtime`);
             content.push(`        todo!("Call JSII runtime")`);
