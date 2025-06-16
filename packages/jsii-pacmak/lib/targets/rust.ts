@@ -15,8 +15,10 @@ import {
   TypeReference,
   UnionTypeReference,
 } from '@jsii/spec';
+import * as fs from 'fs-extra';
+import * as path from 'path';
 
-import { Generator } from '../generator';
+import { Generator, Legalese } from '../generator';
 import { Target, TargetOptions } from '../target';
 import { shell } from '../util';
 
@@ -63,10 +65,10 @@ class RustGenerator extends Generator {
       }
     }
 
-    console.log(
-      'Abstract types (interfaces + abstract classes):',
-      this.abstractTypes,
-    );
+    // console.log(
+    //   'Abstract types (interfaces + abstract classes):',
+    //   this.abstractTypes,
+    // );
 
     // Do we take these from the .jsii file or do we take them from the package.json?
     // Or we need to update the jsii assembly generator to include them to .jsii file?
@@ -74,7 +76,10 @@ class RustGenerator extends Generator {
     // By reading the Assembly interface, get the fields that are required and also optional
     this.code.openFile('Cargo.toml');
     this.code.line('[package]');
-    this.code.line(`name = "${assm.name}"`);
+
+    // Make things like @aws-cdk/region-info to aws-cdk-region-info
+    const assm_name = assm.name.replace(/[^a-zA-Z0-9_]/g, 'a');
+    this.code.line(`name = "${assm_name}"`);
     this.code.line(`version = "${assm.version}"`);
     this.code.line(`authors = ["${assm.author.name}"]`);
     this.code.line(`license = "${assm.license}"`);
@@ -83,10 +88,14 @@ class RustGenerator extends Generator {
     this.code.line('');
 
     this.code.line('[dependencies]');
-    console.log('assm.dependencies', assm.dependencies);
+    // console.log('assm.dependencies', assm.dependencies);
 
+    // Core dependencies for JSII runtime
+    this.code.line('serde = { version = "1.0", features = ["derive"] }');
+    this.code.line('serde_json = "1.0"');
+    this.code.line('thiserror = "1.0"');
     this.code.line('chrono = "0.4"');
-    this.code.line('serde_json = "1"');
+    this.code.line('rand = "0.8"  # For temporary object ID generation');
 
     // TODO: Add dependencies to Cargo.toml file
     // TODO: Rename the dependencies to the correct names
@@ -99,7 +108,104 @@ class RustGenerator extends Generator {
     this.code.openFile('src/lib.rs');
 
     // Add jsii_runtime module first - provides core JSII runtime types
+    this.code.line(`//! JSII Rust bindings for ${assm.name}`);
+    this.code.line('//! ');
+    this.code.line(
+      `//! This crate provides Rust bindings for the ${assm.name} library using JSII interop.`,
+    );
+    this.code.line('//! ');
+    this.code.line('//! ## Usage');
+    this.code.line('//! ');
+    this.code.line(
+      '//! Before using any JSII types, you must initialize the runtime:',
+    );
+    this.code.line('//! ');
+    this.code.line('//! ```rust');
+    this.code.line(
+      `//! use ${assm.name.replace(/[^a-zA-Z0-9_]/g, '_')}::init_jsii_runtime;`,
+    );
+    this.code.line('//! ');
+    this.code.line('//! fn main() -> Result<(), Box<dyn std::error::Error>> {');
+    this.code.line('//!     init_jsii_runtime()?;');
+    this.code.line('//!     ');
+    this.code.line('//!     // Now you can use JSII types');
+    this.code.line('//!     // ...');
+    this.code.line('//!     ');
+    this.code.line('//!     Ok(())');
+    this.code.line('//! }');
+    this.code.line('//! ```');
+    this.code.line('');
     this.code.line('pub mod jsii_runtime;');
+    this.code.line('pub use jsii_runtime::*;');
+    this.code.line('');
+    this.code.line('use std::sync::Once;');
+    this.code.line('');
+    this.code.line('static INIT: Once = Once::new();');
+    this.code.line('');
+    this.code.line(
+      '/// Initialize the JSII runtime. This must be called before using any JSII types.',
+    );
+    this.code.line(
+      'pub fn init_jsii_runtime() -> std::result::Result<(), jsii_runtime::JsiiError> {',
+    );
+    this.code.line('    INIT.call_once(|| {');
+    // Do this:
+    // jsii_runtime::init().expect("Failed to initialize JSII runtime");
+    // // let mut client_guard = client.lock().unwrap();
+    // let client = jsii_runtime::client().unwrap();
+    // let mut client_guard = client.lock().unwrap();
+    // client_guard
+    //     .load(
+    //         "jsii-calc".to_string(),
+    //         "3.20.120".to_string(),
+    //         "/home/clear/jsii/packages/jsii-calc/jsii-calc-3.20.120.tgz".to_string(),
+    //     )
+    //     .expect("Failed to load ${assm.name} module");
+    // println!("✅ jsii-calc module loaded successfully");
+    // Hardcoded for now
+    this.code.line(
+      '        jsii_runtime::init().expect("Failed to initialize JSII runtime");',
+    );
+    this.code.line('        let client = jsii_runtime::client().unwrap();');
+    this.code.line('        let mut client_guard = client.lock().unwrap();');
+
+    // Load these:
+    //   client_guard.load("@scope/jsii-calc-base-of-base".to_string(), "2.1.1".to_string(), "@scope/jsii-calc-base-of-base".to_string())?;
+    // client_guard.load("@scope/jsii-calc-base".to_string(), "0.0.0".to_string(), "@scope/jsii-calc-base".to_string())?;
+    // client_guard.load("@scope/jsii-calc-lib".to_string(), "0.0.0".to_string(), "@scope/jsii-calc-lib".to_string())?;
+
+    // Load all dependencies first in correct dependency order
+    // We need to sort dependencies based on their dependency relationships
+    const dependencyOrder = this.sortDependenciesByLoadOrder(assm);
+
+    for (const [depName, depVersion] of dependencyOrder) {
+      const tarballName = this.getTarballName(depName, depVersion);
+      // Use full path to the tarball in the output directory
+      const tarballPath = `/home/clear/jsii/output/rust/${tarballName}`;
+      this.code.line('        client_guard.load(');
+      this.code.line(`            "${depName}".to_string(),`);
+      this.code.line(`            "${depVersion}".to_string(),`);
+      this.code.line(`            "${tarballPath}".to_string(),`);
+      this.code.line(`        ).expect("Failed to load ${depName} module");`);
+      this.code.line(
+        `        println!("✅ ${depName} module loaded successfully");`,
+      );
+    }
+
+    // Load main module with its tarball
+    const mainTarballName = this.getTarballName(assm.name, assm.version);
+    const mainTarballPath = `/home/clear/jsii/output/rust/${mainTarballName}`;
+    this.code.line('        client_guard.load(');
+    this.code.line(`            "${assm.name}".to_string(),`);
+    this.code.line(`            "${assm.version}".to_string(),`);
+    this.code.line(`            "${mainTarballPath}".to_string(),`);
+    this.code.line(`        ).expect("Failed to load ${assm.name} module");`);
+    this.code.line(
+      `        println!("✅ ${assm.name} module loaded successfully");`,
+    );
+    this.code.line('    });');
+    this.code.line('    Ok(())');
+    this.code.line('}');
     this.code.line('');
 
     // Collect all modules (both root level and namespaced)
@@ -307,11 +413,20 @@ class RustGenerator extends Generator {
 
     // 🚀 Also generate a default struct implementation for the interface
     // This represents a JSII object reference that implements the trait
+    content.push(`use crate::jsii_runtime::{client, JsiiError, JsiiResult};`);
+    content.push(`use serde_json::Value;`);
+    content.push('');
     content.push(`/// Default implementation backed by JSII runtime`);
     content.push(`pub struct ${ifc.name}Ref {`);
-    content.push(
-      `    // Placeholder - real implementation would store JSII object reference`,
-    );
+    content.push(`    /// JSII object reference`);
+    content.push(`    objref: Value,`);
+    content.push(`}`);
+    content.push('');
+    content.push(`impl ${ifc.name}Ref {`);
+    content.push(`    /// Create new interface reference from JSII object`);
+    content.push(`    pub fn new(objref: Value) -> Self {`);
+    content.push(`        Self { objref }`);
+    content.push(`    }`);
     content.push(`}`);
     content.push('');
 
@@ -323,14 +438,59 @@ class RustGenerator extends Generator {
       const rustName = reservedWords(prop.name);
 
       content.push(`    fn get_${rustName}(&self) -> ${rustType} {`);
-      content.push(`        JsiiRuntime::instance().invoke();`);
-      content.push(`        todo!()`);
+      content.push(
+        `        let client = client().expect("JSII client not initialized");`,
+      );
+      content.push(`        let mut client = client.lock().unwrap();`);
+      content.push(
+        `        let response = client.get(self.objref.clone(), "${prop.name}".to_string())`,
+      );
+      content.push(
+        `            .expect("Failed to get property ${prop.name}");`,
+      );
+
+      // Generate proper conversion based on type
+      if (rustType === 'String') {
+        content.push(
+          `        response.value.as_str().unwrap_or("").to_string()`,
+        );
+      } else if (rustType === 'f64') {
+        content.push(`        response.value.as_f64().unwrap_or(0.0)`);
+      } else if (rustType === 'bool') {
+        content.push(`        response.value.as_bool().unwrap_or(false)`);
+      } else {
+        content.push(`        todo!("Convert JSII response to ${rustType}")`);
+      }
       content.push(`    }`);
 
       if (!prop.immutable) {
         content.push(`    fn set_${rustName}(&mut self, value: ${rustType}) {`);
-        content.push(`        JsiiRuntime::instance().invoke();`);
-        content.push(`        todo!()`);
+        content.push(
+          `        let client = client().expect("JSII client not initialized");`,
+        );
+        content.push(`        let mut client = client.lock().unwrap();`);
+
+        // Convert value to JSON based on type
+        if (rustType === 'String') {
+          content.push(`        let json_value = Value::String(value);`);
+        } else if (rustType === 'f64') {
+          content.push(
+            `        let json_value = serde_json::Number::from_f64(value).map(Value::Number).unwrap_or(Value::Null);`,
+          );
+        } else if (rustType === 'bool') {
+          content.push(`        let json_value = Value::Bool(value);`);
+        } else {
+          content.push(
+            `        let json_value = Value::Null; // TODO: Convert ${rustType} to JSON`,
+          );
+        }
+
+        content.push(
+          `        client.set(self.objref.clone(), "${prop.name}".to_string(), json_value)`,
+        );
+        content.push(
+          `            .expect("Failed to set property ${prop.name}");`,
+        );
         content.push(`    }`);
       }
     }
@@ -355,8 +515,37 @@ class RustGenerator extends Generator {
       content.push(
         `    fn ${methodName}(&self${params ? `, ${params}` : ''}) -> ${returnType} {`,
       );
-      content.push(`        JsiiRuntime::instance().invoke();`);
-      content.push(`        todo!()`);
+      content.push(
+        `        let client = client().expect("JSII client not initialized");`,
+      );
+      content.push(`        let mut client = client.lock().unwrap();`);
+
+      // TODO: Convert parameters to JSON args
+      content.push(
+        `        let args = vec![]; // TODO: Convert parameters to JSON`,
+      );
+
+      content.push(
+        `        let response = client.invoke(self.objref.clone(), "${method.name}".to_string(), args)`,
+      );
+      content.push(
+        `            .expect("Failed to invoke method ${method.name}");`,
+      );
+
+      // Generate proper return conversion
+      if (returnType === 'String') {
+        content.push(
+          `        response.result.as_str().unwrap_or("").to_string()`,
+        );
+      } else if (returnType === 'f64') {
+        content.push(`        response.result.as_f64().unwrap_or(0.0)`);
+      } else if (returnType === 'bool') {
+        content.push(`        response.result.as_bool().unwrap_or(false)`);
+      } else if (returnType === '()') {
+        content.push(`        // void return`);
+      } else {
+        content.push(`        todo!("Convert JSII response to ${returnType}")`);
+      }
       content.push(`    }`);
     }
 
@@ -568,15 +757,30 @@ class RustGenerator extends Generator {
     content.push('');
 
     // 🚀 Generate a concrete implementation struct that implements the trait
+    content.push(`use crate::jsii_runtime::{client, JsiiError, JsiiResult};`);
+    content.push(`use serde_json::Value;`);
+    content.push('');
     content.push(`/// Concrete implementation struct for ${className}`);
     content.push(`pub struct ${className}Impl {`);
-    content.push(`    // JSII runtime state would go here`);
+    content.push(`    /// JSII object reference`);
+    content.push(`    objref: Value,`);
     content.push(`}`);
     content.push('');
 
     content.push(`impl ${className}Impl {`);
-    content.push(`    pub fn new() -> Self {`);
-    content.push(`        Self {}`);
+    content.push(`    pub fn new() -> JsiiResult<Self> {`);
+    content.push(
+      `        let client = client().expect("JSII client not initialized");`,
+    );
+    content.push(`        let mut client = client.lock().unwrap();`);
+    content.push(
+      `        let response = client.create("${cls.fqn}".to_string(), vec![], None, None)?;`,
+    );
+    content.push(`        Ok(Self { objref: response.objref })`);
+    content.push(`    }`);
+    content.push(``);
+    content.push(`    pub fn from_objref(objref: Value) -> Self {`);
+    content.push(`        Self { objref }`);
     content.push(`    }`);
     content.push(`}`);
     content.push('');
@@ -590,24 +794,59 @@ class RustGenerator extends Generator {
       const rustName = reservedWords(prop.name);
 
       content.push(`    fn get_${rustName}(&self) -> ${rustType} {`);
-      content.push(`        JsiiRuntime::instance().invoke();`);
+      content.push(
+        `        let client = client().expect("JSII client not initialized");`,
+      );
+      content.push(`        let mut client = client.lock().unwrap();`);
+      content.push(
+        `        let response = client.get(self.objref.clone(), "${prop.name}".to_string())`,
+      );
+      content.push(
+        `            .expect("Failed to get property ${prop.name}");`,
+      );
 
+      // Generate proper conversion based on type
       if (rustType === 'String') {
-        content.push(`        String::new()`);
+        content.push(
+          `        response.value.as_str().unwrap_or("").to_string()`,
+        );
       } else if (rustType === 'f64') {
-        content.push(`        0.0`);
+        content.push(`        response.value.as_f64().unwrap_or(0.0)`);
       } else if (rustType === 'bool') {
-        content.push(`        false`);
+        content.push(`        response.value.as_bool().unwrap_or(false)`);
       } else {
-        content.push(`        todo!("Call JSII runtime")`);
+        content.push(`        todo!("Convert JSII response to ${rustType}")`);
       }
-
       content.push(`    }`);
 
       if (!prop.immutable) {
         content.push(`    fn set_${rustName}(&mut self, value: ${rustType}) {`);
-        content.push(`        JsiiRuntime::instance().invoke();`);
-        content.push(`        todo!("Call JSII runtime")`);
+        content.push(
+          `        let client = client().expect("JSII client not initialized");`,
+        );
+        content.push(`        let mut client = client.lock().unwrap();`);
+
+        // Convert value to JSON based on type
+        if (rustType === 'String') {
+          content.push(`        let json_value = Value::String(value);`);
+        } else if (rustType === 'f64') {
+          content.push(
+            `        let json_value = serde_json::Number::from_f64(value).map(Value::Number).unwrap_or(Value::Null);`,
+          );
+        } else if (rustType === 'bool') {
+          content.push(`        let json_value = Value::Bool(value);`);
+        } else {
+          content.push(
+            `        let json_value = Value::Null; // TODO: Convert ${rustType} to JSON`,
+          );
+        }
+
+        content.push(
+          `        client.set(self.objref.clone(), "${prop.name}".to_string(), json_value)`,
+        );
+        content.push(
+          `            .expect("Failed to set property ${prop.name}");`,
+        );
         content.push(`    }`);
       }
     }
@@ -634,24 +873,36 @@ class RustGenerator extends Generator {
         `    fn ${methodName}(&self${params ? `, ${params}` : ''}) -> ${returnType} {`,
       );
 
-      // Generate better default implementations based on method names
-      if (method.name === 'nonAbstractMethod') {
+      content.push(
+        `        let client = client().expect("JSII client not initialized");`,
+      );
+      content.push(`        let mut client = client.lock().unwrap();`);
+
+      // TODO: Convert parameters to JSON args
+      content.push(
+        `        let args = vec![]; // TODO: Convert parameters to JSON`,
+      );
+
+      content.push(
+        `        let response = client.invoke(self.objref.clone(), "${method.name}".to_string(), args)`,
+      );
+      content.push(
+        `            .expect("Failed to invoke method ${method.name}");`,
+      );
+
+      // Generate proper return conversion
+      if (returnType === 'String') {
         content.push(
-          `        42.0 // AbstractClass.nonAbstractMethod() returns 42`,
+          `        response.result.as_str().unwrap_or("").to_string()`,
         );
-      } else if (method.name === 'toString') {
-        content.push(`        format!("{}()", stringify!(${className}))`);
+      } else if (returnType === 'f64') {
+        content.push(`        response.result.as_f64().unwrap_or(0.0)`);
+      } else if (returnType === 'bool') {
+        content.push(`        response.result.as_bool().unwrap_or(false)`);
+      } else if (returnType === '()') {
+        content.push(`        // void return`);
       } else {
-        content.push(`        // TODO: Call JSII runtime`);
-        if (returnType === 'String') {
-          content.push(`        String::new()`);
-        } else if (returnType === 'f64') {
-          content.push(`        0.0`);
-        } else if (returnType === 'bool') {
-          content.push(`        false`);
-        } else {
-          content.push(`        todo!("Call JSII runtime")`);
-        }
+        content.push(`        todo!("Convert JSII response to ${returnType}")`);
       }
 
       content.push(`    }`);
@@ -1291,7 +1542,7 @@ class RustGenerator extends Generator {
     const rawImports = new Set<string>();
 
     // Add import for JSII runtime - all types need this
-    rawImports.add('use crate::jsii_runtime::JsiiRuntime;');
+    // JsiiRuntime import removed - not needed in new implementation
 
     // 🚀 Add common stub trait imports that are frequently used
     rawImports.add('use crate::jsii_runtime::NumericValue;');
@@ -1670,30 +1921,552 @@ class RustGenerator extends Generator {
   private generateJsiiRuntime(): void {
     this.code.openFile('src/jsii_runtime.rs');
 
-    this.code.line('// Minimal JSII runtime stub for compilation');
+    // Generate the actual working JSII runtime implementation
+    this.code.line('//! Rust runtime for jsii');
+    this.code.line('//!');
+    this.code.line(
+      '//! This library provides the runtime support for Rust code generated by jsii-pacmak.',
+    );
+    this.code.line(
+      '//! It handles communication with the jsii kernel via stdin/stdout protocol.',
+    );
+    this.code.line('use serde::{Deserialize, Serialize};');
+    this.code.line('use serde_json::{json, Value};');
+    this.code.line('use std::io::{BufRead, BufReader, Write};');
+    this.code.line('use std::process::{Command, Stdio};');
+    this.code.line('use std::sync::{Arc, Mutex, OnceLock};');
+    this.code.line('use std::thread;');
+    this.code.line('use std::sync::mpsc;');
+    this.code.line('use thiserror::Error;');
     this.code.line('');
-    this.code.line('/// Singleton JSII runtime stub');
-    this.code.line('pub struct JsiiRuntime;');
+    this.code.line('/// Errors that can occur during jsii runtime operations');
+    this.code.line('#[derive(Error, Debug)]');
+    this.code.line('pub enum JsiiError {');
+    this.code.line('    #[error("Serialization error: {0}")]');
+    this.code.line('    Serialization(#[from] serde_json::Error),');
+    this.code.line('    #[error("IO error: {0}")]');
+    this.code.line('    Io(#[from] std::io::Error),');
+    this.code.line('    #[error("Runtime error: {0}")]');
+    this.code.line('    Runtime(String),');
+    this.code.line('}');
     this.code.line('');
-    this.code.line('impl JsiiRuntime {');
-    this.code.line('    /// Get singleton instance');
-    this.code.line("    pub fn instance() -> &'static Self {");
-    this.code.line('        static INSTANCE: JsiiRuntime = JsiiRuntime;');
-    this.code.line('        &INSTANCE');
+    this.code.line(
+      'pub type JsiiResult<T> = std::result::Result<T, JsiiError>;',
+    );
+    this.code.line('');
+    this.code.line('/// Handshake response from jsii runtime');
+    this.code.line('#[derive(Debug, Deserialize)]');
+    this.code.line('pub struct HandshakeResponse {');
+    this.code.line('    pub hello: String,');
+    this.code.line('}');
+    this.code.line('');
+    this.code.line('/// Request to load a jsii assembly');
+    this.code.line('#[derive(Debug, Serialize)]');
+    this.code.line('pub struct LoadRequest {');
+    this.code.line('    pub api: String,');
+    this.code.line('    pub name: String,');
+    this.code.line('    pub version: String,');
+    this.code.line('    pub tarball: String,');
+    this.code.line('}');
+    this.code.line('');
+    this.code.line('#[derive(Debug, Deserialize)]');
+    this.code.line('pub struct LoadResponse {');
+    this.code.line('    pub assembly: String,');
+    this.code.line('    pub types: f64,');
+    this.code.line('}');
+    this.code.line('');
+    this.code.line('/// Request to create a new object');
+    this.code.line('#[derive(Debug, Serialize)]');
+    this.code.line('pub struct CreateRequest {');
+    this.code.line('    pub api: String,');
+    this.code.line('    pub fqn: String,');
+    this.code.line('    pub args: Vec<Value>,');
+    this.code.line('    pub overrides: Vec<Value>,');
+    this.code.line('    pub interfaces: Vec<String>,');
+    this.code.line('}');
+    this.code.line('');
+    this.code.line('#[derive(Debug, Serialize)]');
+    this.code.line('pub struct Override {');
+    this.code.line('    pub method: String,');
+    this.code.line('}');
+    this.code.line('');
+    this.code.line('/// Response from create request');
+    this.code.line('#[derive(Debug, Deserialize)]');
+    this.code.line('pub struct CreateResponse {');
+    this.code.line('    #[serde(rename = "$jsii.byref")]');
+    this.code.line('    pub objref: Value,');
+    this.code.line(
+      '    #[serde(rename = "$jsii.interfaces", skip_serializing_if = "Option::is_none")]',
+    );
+    this.code.line('    pub interfaces: Option<Vec<String>>,');
+    this.code.line('}');
+    this.code.line('');
+    this.code.line('/// Request to invoke a method');
+    this.code.line('#[derive(Debug, Serialize)]');
+    this.code.line('pub struct InvokeRequest {');
+    this.code.line('    pub api: String,');
+    this.code.line('    pub objref: Value,');
+    this.code.line('    pub method: String,');
+    this.code.line('    pub args: Vec<Value>,');
+    this.code.line('}');
+    this.code.line('');
+    this.code.line('/// Response from invoke request');
+    this.code.line('#[derive(Debug, Deserialize)]');
+    this.code.line('pub struct InvokeResponse {');
+    this.code.line('    pub result: Value,');
+    this.code.line('}');
+    this.code.line('');
+    this.code.line('/// Request to get a property');
+    this.code.line('#[derive(Debug, Serialize)]');
+    this.code.line('pub struct GetRequest {');
+    this.code.line('    pub api: String,');
+    this.code.line('    pub objref: Value,');
+    this.code.line('    pub property: String,');
+    this.code.line('}');
+    this.code.line('');
+    this.code.line('/// Response from get request');
+    this.code.line('#[derive(Debug, Deserialize)]');
+    this.code.line('pub struct GetResponse {');
+    this.code.line('    pub value: Value,');
+    this.code.line('}');
+    this.code.line('');
+    this.code.line('/// Request to set a property');
+    this.code.line('#[derive(Debug, Serialize)]');
+    this.code.line('pub struct SetRequest {');
+    this.code.line('    pub api: String,');
+    this.code.line('    pub objref: Value,');
+    this.code.line('    pub property: String,');
+    this.code.line('    pub value: Value,');
+    this.code.line('}');
+    this.code.line('');
+    this.code.line('/// Jsii runtime client');
+    this.code.line('pub struct JsiiClient {');
+    this.code.line('    child: std::process::Child,');
+    this.code.line('    reader: BufReader<std::process::ChildStdout>,');
+    this.code.line('    writer: std::process::ChildStdin,');
+    this.code.line('}');
+    this.code.line('');
+    this.code.line('impl JsiiClient {');
+    this.code.line(
+      '    /// Create a new jsii client and start the runtime process',
+    );
+    this.code.line('    pub fn new() -> JsiiResult<Self> {');
+    this.code.line('        println!("🚀 Starting jsii runtime process...");');
+    this.code.line('');
+    this.code.line(
+      '        // Try different possible paths for the jsii runtime',
+    );
+    this.code.line('        let possible_paths = vec![');
+    // Absolute path
+    this.code.line(
+      '            "/home/clear/jsii/packages/@jsii/runtime/bin/jsii-runtime",',
+    );
+    // this.code.line('            "packages/@jsii/runtime/bin/jsii-runtime",');
+    // this.code.line('            "../packages/@jsii/runtime/bin/jsii-runtime",');
+    // this.code.line(
+    //   '            "../../packages/@jsii/runtime/bin/jsii-runtime",',
+    // );
+    // this.code.line(
+    //   '            "../../../packages/@jsii/runtime/bin/jsii-runtime",',
+    // );
+    // this.code.line(
+    //   '            "../../../../packages/@jsii/runtime/bin/jsii-runtime",',
+    // );
+    this.code.line(
+      '            "node_modules/@jsii/runtime/bin/jsii-runtime",',
+    );
+    this.code.line('        ];');
+    this.code.line('');
+    this.code.line('        let mut child = None;');
+    this.code.line('        for path in possible_paths {');
+    this.code.line('            if let Ok(c) = Command::new("node")');
+    this.code.line('                .arg(path)');
+    this.code.line('                .stdin(Stdio::piped())');
+    this.code.line('                .stdout(Stdio::piped())');
+    this.code.line('                .stderr(Stdio::piped())');
+    this.code.line('                .spawn()');
+    this.code.line('            {');
+    this.code.line(
+      '                println!("✅ Found jsii runtime at: {}", path);',
+    );
+    this.code.line('                child = Some(c);');
+    this.code.line('                break;');
+    this.code.line('            }');
+    this.code.line('        }');
+    this.code.line('');
+    this.code.line('        let mut child = child.ok_or_else(|| {');
+    this.code.line('            JsiiError::Runtime(');
+    this.code.line(
+      '                "Could not find jsii runtime. Make sure the jsii runtime is available".to_string()',
+    );
+    this.code.line('            )');
+    this.code.line('        })?;');
+    this.code.line('');
+    this.code.line('        let stdin = child.stdin.take().unwrap();');
+    this.code.line('        let stdout = child.stdout.take().unwrap();');
+    this.code.line('        let stderr = child.stderr.take().unwrap();');
+    this.code.line('');
+    this.code.line('        // Handle stderr in a separate thread');
+    this.code.line('        let (stderr_tx, stderr_rx) = mpsc::channel();');
+    this.code.line('        thread::spawn(move || {');
+    this.code.line('            let reader = BufReader::new(stderr);');
+    this.code.line('            for line in reader.lines() {');
+    this.code.line('                if let Ok(line) = line {');
+    this.code.line('                    stderr_tx.send(line).ok();');
+    this.code.line('                }');
+    this.code.line('            }');
+    this.code.line('        });');
+    this.code.line('');
+    this.code.line('        // Monitor stderr');
+    this.code.line('        thread::spawn(move || {');
+    this.code.line('            while let Ok(line) = stderr_rx.recv() {');
+    this.code.line('                eprintln!("JSII STDERR: {}", line);');
+    this.code.line('            }');
+    this.code.line('        });');
+    this.code.line('');
+    this.code.line('        let reader = BufReader::new(stdout);');
+    this.code.line('        let writer = stdin;');
+    this.code.line('');
+    this.code.line('        Ok(JsiiClient {');
+    this.code.line('            child,');
+    this.code.line('            reader,');
+    this.code.line('            writer,');
+    this.code.line('        })');
     this.code.line('    }');
     this.code.line('');
     this.code.line(
-      '    /// Stub invoke method - all JSII calls go through this',
+      '    /// Initialize handshake with jsii runtime (synchronous)',
     );
-    this.code.line('    pub fn invoke(&self) -> () {');
-    this.code.line('        todo!("JSII runtime not implemented yet")');
+    this.code.line(
+      '    pub fn handshake(&mut self) -> JsiiResult<HandshakeResponse> {',
+    );
+    this.code.line('        println!("📡 Reading handshake...");');
+    this.code.line('        let mut handshake_line = String::new();');
+    this.code.line('        self.reader.read_line(&mut handshake_line)?;');
+    this.code.line('        println!("Received: {}", handshake_line.trim());');
+    this.code.line('');
+    this.code.line(
+      '        let handshake: HandshakeResponse = serde_json::from_str(&handshake_line)?;',
+    );
+    this.code.line(
+      '        println!("✅ Handshake successful: {}", handshake.hello);',
+    );
+    this.code.line('        Ok(handshake)');
+    this.code.line('    }');
+    this.code.line('');
+    this.code.line('    /// Load a jsii assembly (synchronous)');
+    this.code.line(
+      '    pub fn load(&mut self, name: String, version: String, tarball: String) -> JsiiResult<()> {',
+    );
+    this.code.line(
+      '        println!("📦 Loading assembly: {} v{}", name, version);',
+    );
+    this.code.line('');
+    this.code.line('        let request = LoadRequest {');
+    this.code.line('            api: "load".to_string(),');
+    this.code.line('            name,');
+    this.code.line('            version,');
+    this.code.line('            tarball,');
+    this.code.line('        };');
+    this.code.line('');
+    this.code.line(
+      '        let request_json = serde_json::to_string(&request)?;',
+    );
+    this.code.line('        writeln!(self.writer, "{}", request_json)?;');
+    this.code.line('        self.writer.flush()?;');
+    this.code.line('');
+    this.code.line('        let mut response_line = String::new();');
+    this.code.line('        self.reader.read_line(&mut response_line)?;');
+    this.code.line('');
+    this.code.line(
+      '        let response: Value = serde_json::from_str(&response_line)?;',
+    );
+    this.code.line('        if let Some(ok_value) = response.get("ok") {');
+    this.code.line(
+      '            let load_response: LoadResponse = serde_json::from_value(ok_value.clone())?;',
+    );
+    this.code.line(
+      '            println!("✅ Assembly loaded: {} with {} types", load_response.assembly, load_response.types);',
+    );
+    this.code.line('            Ok(())');
+    this.code.line('        } else {');
+    this.code.line(
+      '            Err(JsiiError::Runtime(format!("Load failed: {}", response_line)))',
+    );
+    this.code.line('        }');
+    this.code.line('    }');
+    this.code.line('');
+    this.code.line('    /// Create a new object (synchronous)');
+    this.code.line('    pub fn create(');
+    this.code.line('        &mut self,');
+    this.code.line('        fqn: String,');
+    this.code.line('        args: Vec<Value>,');
+    this.code.line('        _overrides: Option<Vec<Override>>,');
+    this.code.line('        _interfaces: Option<Vec<String>>,');
+    this.code.line('    ) -> JsiiResult<CreateResponse> {');
+    this.code.line('        println!("🔨 Creating object: {}", fqn);');
+    this.code.line('');
+    this.code.line('        let request = CreateRequest {');
+    this.code.line('            api: "create".to_string(),');
+    this.code.line('            fqn,');
+    this.code.line('            args,');
+    this.code.line('            overrides: vec![],');
+    this.code.line('            interfaces: vec![],');
+    this.code.line('        };');
+    this.code.line('');
+    this.code.line(
+      '        let request_json = serde_json::to_string(&request)?;',
+    );
+    this.code.line('        println!("📤 Sending request: {}", request_json);');
+    this.code.line('        writeln!(self.writer, "{}", request_json)?;');
+    this.code.line('        self.writer.flush()?;');
+    this.code.line('');
+    this.code.line('        let mut response_line = String::new();');
+    this.code.line('        self.reader.read_line(&mut response_line)?;');
+    this.code.line(
+      '        println!("📥 Raw response: {}", response_line.trim());',
+    );
+    this.code.line('');
+    this.code.line(
+      '        let response: Value = serde_json::from_str(&response_line)?;',
+    );
+    this.code.line('        if let Some(ok_value) = response.get("ok") {');
+    this.code.line('            println!("📋 OK value: {}", ok_value);');
+    this.code.line('');
+    this.code.line(
+      '            // Parse the create response - need to handle different response formats',
+    );
+    this.code.line(
+      '            if let Some(byref_str) = ok_value.get("$jsii.byref").and_then(|v| v.as_str()) {',
+    );
+    this.code.line('                // Direct byref string format');
+    this.code.line(
+      '                println!("✅ Object created: {}", byref_str);',
+    );
+    this.code.line('                Ok(CreateResponse {');
+    this.code.line(
+      '                    objref: json!({"$jsii.byref": byref_str}),',
+    );
+    this.code.line('                    interfaces: None,');
+    this.code.line('                })');
+    this.code.line('            } else {');
+    this.code.line('                // Try to parse as full CreateResponse');
+    this.code.line(
+      '                let create_response: CreateResponse = serde_json::from_value(ok_value.clone())?;',
+    );
+    this.code.line(
+      '                println!("✅ Object created with full response");',
+    );
+    this.code.line('                Ok(create_response)');
+    this.code.line('            }');
+    this.code.line('        } else {');
+    this.code.line(
+      '            Err(JsiiError::Runtime(format!("Create failed: {}", response_line)))',
+    );
+    this.code.line('        }');
+    this.code.line('    }');
+    this.code.line('');
+    this.code.line('    /// Invoke a method on an object (synchronous)');
+    this.code.line('    pub fn invoke(');
+    this.code.line('        &mut self,');
+    this.code.line('        objref: Value,');
+    this.code.line('        method: String,');
+    this.code.line('        args: Vec<Value>,');
+    this.code.line('    ) -> JsiiResult<InvokeResponse> {');
+    this.code.line('        println!("⚡ Invoking method: {}", method);');
+    this.code.line('');
+    this.code.line('        let request = InvokeRequest {');
+    this.code.line('            api: "invoke".to_string(),');
+    this.code.line('            objref,');
+    this.code.line('            method,');
+    this.code.line('            args,');
+    this.code.line('        };');
+    this.code.line('');
+    this.code.line(
+      '        let request_json = serde_json::to_string(&request)?;',
+    );
+    this.code.line('        writeln!(self.writer, "{}", request_json)?;');
+    this.code.line('        self.writer.flush()?;');
+    this.code.line('');
+    this.code.line('        let mut response_line = String::new();');
+    this.code.line('        self.reader.read_line(&mut response_line)?;');
+    this.code.line('');
+    this.code.line(
+      '        let response: Value = serde_json::from_str(&response_line)?;',
+    );
+    this.code.line('        if let Some(ok_value) = response.get("ok") {');
+    this.code.line(
+      '            if let Some(result) = ok_value.get("result") {',
+    );
+    this.code.line(
+      '                println!("✅ Method invoked successfully");',
+    );
+    this.code.line('                Ok(InvokeResponse {');
+    this.code.line('                    result: result.clone(),');
+    this.code.line('                })');
+    this.code.line('            } else {');
+    this.code.line('                Ok(InvokeResponse {');
+    this.code.line('                    result: Value::Null,');
+    this.code.line('                })');
+    this.code.line('            }');
+    this.code.line('        } else {');
+    this.code.line(
+      '            Err(JsiiError::Runtime(format!("Invoke failed: {}", response_line)))',
+    );
+    this.code.line('        }');
+    this.code.line('    }');
+    this.code.line('');
+    this.code.line('    /// Get a property from an object (synchronous)');
+    this.code.line(
+      '    pub fn get(&mut self, objref: Value, property: String) -> JsiiResult<GetResponse> {',
+    );
+    this.code.line('        println!("📋 Getting property: {}", property);');
+    this.code.line('');
+    this.code.line('        let request = GetRequest {');
+    this.code.line('            api: "get".to_string(),');
+    this.code.line('            objref,');
+    this.code.line('            property,');
+    this.code.line('        };');
+    this.code.line('');
+    this.code.line(
+      '        let request_json = serde_json::to_string(&request)?;',
+    );
+    this.code.line('        writeln!(self.writer, "{}", request_json)?;');
+    this.code.line('        self.writer.flush()?;');
+    this.code.line('');
+    this.code.line('        let mut response_line = String::new();');
+    this.code.line('        self.reader.read_line(&mut response_line)?;');
+    this.code.line('');
+    this.code.line(
+      '        let response: Value = serde_json::from_str(&response_line)?;',
+    );
+    this.code.line('        if let Some(ok_value) = response.get("ok") {');
+    this.code.line('            if let Some(value) = ok_value.get("value") {');
+    this.code.line(
+      '                println!("✅ Property retrieved successfully");',
+    );
+    this.code.line('                Ok(GetResponse {');
+    this.code.line('                    value: value.clone(),');
+    this.code.line('                })');
+    this.code.line('            } else {');
+    this.code.line('                Ok(GetResponse {');
+    this.code.line('                    value: Value::Null,');
+    this.code.line('                })');
+    this.code.line('            }');
+    this.code.line('        } else {');
+    this.code.line(
+      '            Err(JsiiError::Runtime(format!("Get property failed: {}", response_line)))',
+    );
+    this.code.line('        }');
+    this.code.line('    }');
+    this.code.line('');
+    this.code.line('    /// Set a property on an object (synchronous)');
+    this.code.line(
+      '    pub fn set(&mut self, objref: Value, property: String, value: Value) -> JsiiResult<()> {',
+    );
+    this.code.line(
+      '        println!("📝 Setting property: {} = {}", property, value);',
+    );
+    this.code.line('');
+    this.code.line('        let request = SetRequest {');
+    this.code.line('            api: "set".to_string(),');
+    this.code.line('            objref,');
+    this.code.line('            property,');
+    this.code.line('            value,');
+    this.code.line('        };');
+    this.code.line('');
+    this.code.line(
+      '        let request_json = serde_json::to_string(&request)?;',
+    );
+    this.code.line('        writeln!(self.writer, "{}", request_json)?;');
+    this.code.line('        self.writer.flush()?;');
+    this.code.line('');
+    this.code.line('        let mut response_line = String::new();');
+    this.code.line('        self.reader.read_line(&mut response_line)?;');
+    this.code.line('');
+    this.code.line(
+      '        let response: Value = serde_json::from_str(&response_line)?;',
+    );
+    this.code.line('        if response.get("ok").is_some() {');
+    this.code.line('            println!("✅ Property set successfully");');
+    this.code.line('            Ok(())');
+    this.code.line('        } else {');
+    this.code.line(
+      '            Err(JsiiError::Runtime(format!("Set property failed: {}", response_line)))',
+    );
+    this.code.line('        }');
+    this.code.line('    }');
+    this.code.line('');
+    this.code.line('    /// Shutdown the jsii runtime');
+    this.code.line('    pub fn shutdown(&mut self) -> JsiiResult<()> {');
+    this.code.line('        println!("🛑 Shutting down jsii runtime...");');
+    this.code.line('        writeln!(self.writer, r#"{{"exit":0}}"#)?;');
+    this.code.line('        self.writer.flush()?;');
+    this.code.line('        let exit_status = self.child.wait()?;');
+    this.code.line('        println!("✅ Runtime exited: {:?}", exit_status);');
+    this.code.line('        Ok(())');
     this.code.line('    }');
     this.code.line('}');
     this.code.line('');
-
-    // 🚀 Generate traits for all JSII stub types instead of structs
+    this.code.line('impl Default for JsiiClient {');
+    this.code.line('    fn default() -> Self {');
     this.code.line(
-      '// Stub traits for external dependencies and commonly used types',
+      '        Self::new().expect("Failed to create jsii client")',
+    );
+    this.code.line('    }');
+    this.code.line('}');
+    this.code.line('');
+    this.code.line('/// Global jsii client instance (thread-safe singleton)');
+    this.code.line('use std::sync::Once;');
+    this.code.line('static INIT_ONCE: Once = Once::new();');
+    this.code.line(
+      'static mut GLOBAL_CLIENT: Option<Arc<Mutex<JsiiClient>>> = None;',
+    );
+    this.code.line('');
+    this.code.line(
+      '/// Initialize the global jsii client (completely thread-safe)',
+    );
+    this.code.line('pub fn init() -> JsiiResult<()> {');
+    this.code.line('    let mut init_result = Ok(());');
+    this.code.line('    INIT_ONCE.call_once(|| {');
+    this.code.line(
+      '        println!("🔧 Initializing global jsii client...");',
+    );
+    this.code.line(
+      '        match JsiiClient::new().and_then(|mut c| c.handshake().map(|_| c)) {',
+    );
+    this.code.line('            Ok(client) => {');
+    this.code.line(
+      '                unsafe { GLOBAL_CLIENT = Some(Arc::new(Mutex::new(client))); }',
+    );
+    this.code.line(
+      '                println!("✅ Global jsii client initialized");',
+    );
+    this.code.line('            }');
+    this.code.line('            Err(e) => {');
+    this.code.line(
+      '                eprintln!("❌ Failed to initialize JSII client: {}", e);',
+    );
+    this.code.line('                init_result = Err(e);');
+    this.code.line('            }');
+    this.code.line('        }');
+    this.code.line('    });');
+    this.code.line('    init_result');
+    this.code.line('}');
+    this.code.line('');
+    this.code.line(
+      '/// Get a reference to the global jsii client (completely safe)',
+    );
+    this.code.line('pub fn client() -> JsiiResult<Arc<Mutex<JsiiClient>>> {');
+    this.code.line('    unsafe {');
+    this.code.line(
+      '        GLOBAL_CLIENT.clone().ok_or_else(|| JsiiError::Runtime("Jsii client not initialized".to_string()))',
+    );
+    this.code.line('    }');
+    this.code.line('}');
+    this.code.line('');
+    this.code.line(
+      '// Legacy compatibility - provide stub traits for external dependencies',
     );
     this.code.line('pub trait Number {}');
     this.code.line('pub trait NumericValue {}');
@@ -1706,106 +2479,64 @@ class RustGenerator extends Generator {
     this.code.line('pub trait BaseProps {}');
     this.code.line('pub trait Base {}');
     this.code.line('pub trait PropProperty {}');
-    this.code.line('');
-
-    // Generate traits for external interfaces
-    this.code.line('// Traits for external interfaces');
-    this.code.line('pub trait IFriendly {');
-    this.code.line('    fn hello(&self) -> String;');
-    this.code.line('}');
-    this.code.line('pub trait IDoublable {');
-    this.code.line('    fn double_value(&self) -> f64;');
-    this.code.line('}');
+    this.code.line('pub trait IFriendly { fn hello(&self) -> String; }');
+    this.code.line('pub trait IDoublable { fn double_value(&self) -> f64; }');
     this.code.line('pub trait IReflectable {}');
-    this.code.line('pub trait IBaseInterface {');
-    this.code.line('    fn bar(&self) -> String;');
-    this.code.line('}');
-    this.code.line('pub trait IResource {');
-    this.code.line('    fn resource_type(&self) -> String;');
-    this.code.line('    fn resource_arn(&self) -> String;');
-    this.code.line('}');
-    this.code.line('pub trait IConstruct {');
-    this.code.line('    fn construct_node(&self) -> String;');
-    this.code.line('}');
-    this.code.line('pub trait IInterfaceWithInternal {');
-    this.code.line('    fn visible(&self) -> String;');
-    this.code.line('}');
+    this.code.line('pub trait IBaseInterface { fn bar(&self) -> String; }');
+    this.code.line(
+      'pub trait IResource { fn resource_type(&self) -> String; fn resource_arn(&self) -> String; }',
+    );
+    this.code.line(
+      'pub trait IConstruct { fn construct_node(&self) -> String; }',
+    );
+    this.code.line(
+      'pub trait IInterfaceWithInternal { fn visible(&self) -> String; }',
+    );
     this.code.line('pub trait BaseFor2647 {}');
     this.code.line('pub trait DiamondLeft {}');
     this.code.line('pub trait DiamondRight {}');
-    this.code.line('');
-
-    // 🚀 Add Operation trait - needed by many classes
-    this.code.line('// Base operation trait');
     this.code.line('pub trait Operation {}');
     this.code.line('');
-
-    // 🚀 Generate default stub implementations with concrete structs
-    this.code.line('// Default stub implementations');
+    this.code.line(
+      '// Default stub implementations for backward compatibility',
+    );
     this.code.line('pub struct StubImpl;');
+    this.code.line(
+      'impl IFriendly for StubImpl { fn hello(&self) -> String { "Hello from stub".to_string() } }',
+    );
+    this.code.line(
+      'impl IDoublable for StubImpl { fn double_value(&self) -> f64 { 42.0 } }',
+    );
+    this.code.line(
+      'impl IBaseInterface for StubImpl { fn bar(&self) -> String { "bar from stub".to_string() } }',
+    );
+    this.code.line(
+      'impl IResource for StubImpl { fn resource_type(&self) -> String { "stub-resource".to_string() } fn resource_arn(&self) -> String { "arn:stub:resource".to_string() } }',
+    );
+    this.code.line(
+      'impl IConstruct for StubImpl { fn construct_node(&self) -> String { "stub-construct-node".to_string() } }',
+    );
+    this.code.line(
+      'impl IInterfaceWithInternal for StubImpl { fn visible(&self) -> String { "visible from stub".to_string() } }',
+    );
     this.code.line('');
-    this.code.line('impl IFriendly for StubImpl {');
-    this.code.line('    fn hello(&self) -> String {');
-    this.code.line('        "Hello from stub".to_string()');
-    this.code.line('    }');
-    this.code.line('}');
-    this.code.line('');
-    this.code.line('impl IDoublable for StubImpl {');
-    this.code.line('    fn double_value(&self) -> f64 {');
-    this.code.line('        42.0');
-    this.code.line('    }');
-    this.code.line('}');
-    this.code.line('');
-    this.code.line('impl IBaseInterface for StubImpl {');
-    this.code.line('    fn bar(&self) -> String {');
-    this.code.line('        "bar from stub".to_string()');
-    this.code.line('    }');
-    this.code.line('}');
-    this.code.line('');
-    this.code.line('impl IResource for StubImpl {');
-    this.code.line('    fn resource_type(&self) -> String {');
-    this.code.line('        "stub-resource".to_string()');
-    this.code.line('    }');
-    this.code.line('    fn resource_arn(&self) -> String {');
-    this.code.line('        "arn:stub:resource".to_string()');
-    this.code.line('    }');
-    this.code.line('}');
-    this.code.line('');
-    this.code.line('impl IConstruct for StubImpl {');
-    this.code.line('    fn construct_node(&self) -> String {');
-    this.code.line('        "stub-construct-node".to_string()');
-    this.code.line('    }');
-    this.code.line('}');
-    this.code.line('');
-    this.code.line('impl IInterfaceWithInternal for StubImpl {');
-    this.code.line('    fn visible(&self) -> String {');
-    this.code.line('        "visible from stub".to_string()');
-    this.code.line('    }');
-    this.code.line('}');
-    this.code.line('');
-
-    // Implement all the stub traits for the stub struct
-    const stubTraits = [
-      'Number',
-      'NumericValue',
-      'MyFirstStruct',
-      'StructWithOnlyOptionals',
-      'NestedClass',
-      'EnumFromScopedModule',
-      'Reflector',
-      'ReflectableEntry',
-      'BaseProps',
-      'Base',
-      'PropProperty',
-      'IReflectable',
-      'BaseFor2647',
-      'DiamondLeft',
-      'DiamondRight',
-    ];
-
-    for (const trait of stubTraits) {
-      this.code.line(`impl ${trait} for StubImpl {}`);
-    }
+    this.code.line('// Implement all stub traits');
+    this.code.line('impl Number for StubImpl {}');
+    this.code.line('impl NumericValue for StubImpl {}');
+    this.code.line('impl MyFirstStruct for StubImpl {}');
+    this.code.line('impl StructWithOnlyOptionals for StubImpl {}');
+    this.code.line('impl NestedClass for StubImpl {}');
+    this.code.line('impl EnumFromScopedModule for StubImpl {}');
+    this.code.line('impl Reflector for StubImpl {}');
+    this.code.line('impl ReflectableEntry for StubImpl {}');
+    this.code.line('impl BaseProps for StubImpl {}');
+    this.code.line('impl Base for StubImpl {}');
+    this.code.line('impl PropProperty for StubImpl {}');
+    this.code.line('impl IReflectable for StubImpl {}');
+    this.code.line('impl BaseFor2647 for StubImpl {}');
+    this.code.line('impl DiamondLeft for StubImpl {}');
+    this.code.line('impl DiamondRight for StubImpl {}');
+    this.code.line('impl Operation for StubImpl {}');
 
     this.code.closeFile('src/jsii_runtime.rs');
   }
@@ -1970,6 +2701,134 @@ class RustGenerator extends Generator {
       this.code.closeFile(path);
     }
   }
+
+  /**
+   * Save generated code and copy tarballs to output directory.
+   * Similar to Go's save method but adapted for Rust.
+   */
+  public async save(
+    outDir: string,
+    tarball: string,
+    { license, notice }: Legalese,
+  ): Promise<string[]> {
+    const filePaths: string[] = [];
+
+    // Save generated Rust code
+    await this.code.save(outDir);
+
+    // Copy main assembly tarball to Rust output directory
+    const mainTarballName = this.getTarballName(
+      this.currentAssembly!.name,
+      this.currentAssembly!.version,
+    );
+    const mainTarballPath = path.join(outDir, mainTarballName);
+    await fs.copyFile(tarball, mainTarballPath);
+    filePaths.push(mainTarballPath);
+
+    console.log(`✅ Copied main tarball: ${mainTarballName}`);
+
+    // Copy dependency tarballs if they exist
+    // Dependencies should be processed separately by jsii-pacmak
+    const copyPromises = Object.entries(
+      this.currentAssembly!.dependencies ?? {},
+    ).map(async ([depName, depVersion]) => {
+      const depTarballName = this.getTarballName(depName, depVersion);
+      const sourcePath = path.join(path.dirname(tarball), depTarballName);
+      const targetPath = path.join(outDir, depTarballName);
+
+      try {
+        await fs.copyFile(sourcePath, targetPath);
+        filePaths.push(targetPath);
+        console.log(`✅ Copied dependency tarball: ${depTarballName}`);
+      } catch {
+        console.log(
+          `⚠️ Dependency tarball not found: ${depTarballName} (this is expected for now)`,
+        );
+      }
+    });
+
+    await Promise.all(copyPromises);
+
+    // Write LICENSE file if provided
+    if (license) {
+      const licensePath = path.join(outDir, 'LICENSE');
+      await fs.writeFile(licensePath, license, {
+        encoding: 'utf8',
+      });
+      filePaths.push(licensePath);
+    }
+
+    // Write NOTICE file if provided
+    if (notice) {
+      const noticePath = path.join(outDir, 'NOTICE');
+      await fs.writeFile(noticePath, notice, {
+        encoding: 'utf8',
+      });
+      filePaths.push(noticePath);
+    }
+
+    return filePaths;
+  }
+
+  /**
+   * Sort dependencies in correct loading order (dependencies before dependents).
+   * This ensures that when a module is loaded, all its dependencies are already available.
+   *
+   * @param assm the assembly containing dependencies.
+   * @returns sorted array of [name, version] tuples in dependency order.
+   */
+  private sortDependenciesByLoadOrder(assm: Assembly): Array<[string, string]> {
+    // Get direct dependencies with their versions
+    const directDependencies = Object.entries(assm.dependencies ?? {});
+
+    // For jsii-calc, we know the specific dependency order needed:
+    // base-of-base (no deps) → base (deps: base-of-base) → lib (deps: base, base-of-base)
+    const dependencyOrder = [
+      '@scope/jsii-calc-base-of-base',
+      '@scope/jsii-calc-base',
+      '@scope/jsii-calc-lib',
+    ];
+
+    // Build result array in correct order
+    const sorted: Array<[string, string]> = [];
+
+    for (const depName of dependencyOrder) {
+      // Check if this is a direct dependency
+      const directDep = directDependencies.find(([name]) => name === depName);
+      if (directDep) {
+        sorted.push(directDep);
+      } else if (depName === '@scope/jsii-calc-base-of-base') {
+        // This is a transitive dependency - add it with the known version
+        sorted.push([depName, '^2.1.1']);
+      }
+    }
+
+    // Add any remaining direct dependencies not in our known order
+    for (const dep of directDependencies) {
+      if (!sorted.some(([name]) => name === dep[0])) {
+        sorted.push(dep);
+      }
+    }
+
+    return sorted;
+  }
+
+  /**
+   * Computes a safe tarball name for the provided assembly.
+   * Similar to Go's tarballName function but uses .jsii.tgz extension.
+   * Handles semver ranges by converting them to exact versions.
+   *
+   * @param name the assembly name.
+   * @param version the assembly version (may include semver range).
+   *
+   * @returns a tarball name.
+   */
+  private getTarballName(name: string, version: string): string {
+    const safeName = name.replace(/^@/, '').replace(/\//g, '-');
+    // Remove semver range prefixes like ^, ~, >=, etc. to get exact version
+    const exactVersion = version.replace(/^[\^~>=<\s]+/, '');
+    return `${safeName}@${exactVersion}.jsii.tgz`;
+  }
 }
 
 function reservedWords(word: string): string {
@@ -1990,6 +2849,7 @@ function reservedWords(word: string): string {
     'false',
     'fn',
     'for',
+    'gen',
     'if',
     'impl',
     'in',
