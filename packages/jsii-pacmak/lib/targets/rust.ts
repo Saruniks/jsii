@@ -162,11 +162,11 @@ class RustGenerator extends Generator {
   }
 
   protected onEndAssembly(_assm: Assembly, _fingerprint: boolean): void {
-    // Write all collected mod.rs files at the end to prevent overwrites
-    this.writeAllModFiles();
-
     // Generate the main lib.rs file that exports all root-level modules
     this.generateMainLibFile(_assm);
+
+    // Write all collected mod.rs files at the end to prevent overwrites
+    this.writeAllModFiles();
   }
 
   protected getAssemblyOutputDir(_mod: Assembly): string {
@@ -2369,33 +2369,11 @@ class RustGenerator extends Generator {
         content.push(`pub mod ${child};`);
       }
 
-      // Add re-exports for types in this namespace
-      if (sortedChildren.length > 0) {
-        content.push('');
-        content.push('// Re-export types from child modules');
-        for (const child of sortedChildren) {
-          // Check if this child is a type or a submodule
-          const fullPath = `${namespace}.${child}`;
-          const isType = this.isTypeName(fullPath);
-
-          if (isType) {
-            // Re-export the type - simplified since everything is in mod.rs now
-            const typeInfo = this.getTypeInfo(fullPath);
-            if (typeInfo) {
-              if (typeInfo.kind === 'interface') {
-                content.push(`pub use ${child}::{${child}, ${child}Ref};`);
-              } else if (typeInfo.kind === 'class') {
-                content.push(`pub use ${child}::${child};`);
-              } else if (typeInfo.kind === 'enum') {
-                content.push(`pub use ${child}::${child};`);
-              }
-            }
-          }
-        }
-      }
-
       this.collectModFileContent(modFilePath, content);
     }
+
+    // Generate intermediate mod.rs files for all namespace levels
+    this.generateIntermediateModFiles();
 
     // Also handle types that may be placed in flattened paths due to conflicts
     // We need to ensure all types are properly declared in accessible module files
@@ -2423,17 +2401,6 @@ class RustGenerator extends Generator {
                 const content: string[] = [];
                 content.push(`pub mod ${type.name};`);
 
-                // Add re-export
-                if (type.kind === TypeKind.Interface) {
-                  content.push(
-                    `pub use ${type.name}::{${type.name}, ${type.name}Ref};`,
-                  );
-                } else if (type.kind === TypeKind.Class) {
-                  content.push(`pub use ${type.name}::${type.name};`);
-                } else if (type.kind === TypeKind.Enum) {
-                  content.push(`pub use ${type.name}::${type.name};`);
-                }
-
                 this.collectModFileContent(modFilePath, content);
               }
             }
@@ -2443,9 +2410,70 @@ class RustGenerator extends Generator {
     }
   }
 
-  private isTypeName(fqn: string): boolean {
-    // Simple check - if we have type info, it's a type
-    return this.getTypeInfo(fqn) !== null;
+  private generateIntermediateModFiles(): void {
+    if (!this.currentAssembly?.types) return;
+
+    // Collect all namespace paths that need intermediate mod.rs files
+    const namespacePaths = new Set<string>();
+
+    for (const type of Object.values(this.currentAssembly.types)) {
+      if (type.namespace) {
+        const namespaceParts = type.namespace.split('.');
+
+        // Generate all intermediate paths (e.g., for "a.b.c" generate "a" and "a/b")
+        for (let i = 1; i <= namespaceParts.length; i++) {
+          const partialNamespace = namespaceParts.slice(0, i).join('.');
+          const modulePath = this.getConflictFreeNamespacePath(
+            partialNamespace,
+            '',
+          );
+          namespacePaths.add(modulePath);
+        }
+      }
+    }
+
+    // Generate mod.rs for each intermediate namespace path
+    for (const modulePath of namespacePaths) {
+      const modFilePath = `src/${modulePath}/mod.rs`;
+
+      // Skip if we already have content for this mod.rs file
+      if (this.modFileContents.has(modFilePath)) {
+        continue;
+      }
+
+      // Find all immediate children of this namespace
+      const children = new Set<string>();
+      const namespaceFromPath = modulePath.replace(/\//g, '.');
+
+      for (const type of Object.values(this.currentAssembly.types)) {
+        if (type.namespace) {
+          // Check if this type is a direct child of the current namespace
+          if (type.namespace === namespaceFromPath) {
+            children.add(type.name);
+          } else if (
+            type.namespace.startsWith(`${namespaceFromPath}.`) &&
+            type.namespace !== namespaceFromPath
+          ) {
+            // This is a deeper nested type, add its immediate child namespace
+            const remainingPath = type.namespace.substring(
+              namespaceFromPath.length + 1,
+            );
+            const nextLevel = remainingPath.split('.')[0];
+            // Only add the next level namespace, not the type itself
+            children.add(nextLevel);
+          }
+        }
+      }
+
+      // Generate mod.rs content
+      if (children.size > 0) {
+        const content: string[] = [];
+        for (const child of Array.from(children).sort()) {
+          content.push(`pub mod ${child};`);
+        }
+        this.collectModFileContent(modFilePath, content);
+      }
+    }
   }
 
   private getTypeInfo(
