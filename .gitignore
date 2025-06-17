@@ -15,3 +15,5 @@ dist/
 build/
 coverage/
 jsii-outdir/
+output/
+test-jsii-calc-rs/target/

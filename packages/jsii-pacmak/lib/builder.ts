@@ -100,6 +100,7 @@ export class IndependentPackageBuilder implements TargetBuilder {
 
   private async generateModuleCode(module: JsiiModule, options: BuildOptions) {
     const outputDir = this.finalOutputDir(module, options);
+    console.log('finalOutputDir', outputDir);
     logging.debug(`Generating ${this.targetName} code into ${outputDir}`);
     await this.makeTarget(module, options).generateCode(
       outputDir,
@@ -110,6 +111,7 @@ export class IndependentPackageBuilder implements TargetBuilder {
   private async buildModule(module: JsiiModule, options: BuildOptions) {
     const target = this.makeTarget(module, options);
     const outputDir = this.finalOutputDir(module, options);
+    console.log('buildModule finalOutputDir', outputDir);
 
     const src = await Scratch.make((tmpdir) => {
       logging.debug(`Generating ${this.targetName} code into ${tmpdir}`);

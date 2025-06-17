@@ -1,0 +1,4 @@
+1. Always use build-rust.sh, don't run other commands.
+2. Remember the typescript linter is configured to be really strict.
+3. Never manually change the generated code, just work on output/rust
+4. Don't forget to regenerate code

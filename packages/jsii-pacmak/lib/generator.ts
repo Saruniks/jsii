@@ -179,6 +179,7 @@ export abstract class Generator implements IGenerator {
     tarball: string,
     { license, notice }: Legalese,
   ) {
+    console.log('save default class', outdir, tarball, license, notice);
     const assemblyDir = this.getAssemblyOutputDir(this.assembly);
     if (assemblyDir) {
       const fullPath = path.resolve(

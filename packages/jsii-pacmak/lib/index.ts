@@ -39,6 +39,28 @@ export async function pacmak({
   updateNpmIgnoreFiles = false,
   validateAssemblies = false,
 }: PacmakOptions): Promise<void> {
+  console.log(
+    'pacmak',
+    argv,
+    clean,
+    codeOnly,
+    fingerprint,
+    force,
+    forceSubdirectory,
+    forceTarget,
+    inputDirectories,
+    outputDirectory,
+    parallel,
+    recurse,
+    rosettaTablet,
+    rosettaUnknownSnippets,
+    runtimeTypeChecking,
+    targets,
+    timers,
+    updateNpmIgnoreFiles,
+    validateAssemblies,
+  );
+
   const rosetta = new RosettaTabletReader({
     unknownSnippets: rosettaUnknownSnippets,
     prefixDisclaimer: true,
@@ -65,8 +87,10 @@ export async function pacmak({
     const absoluteOutputDirectory = resolve(cwd(), outputDirectory);
     for (const mod of modulesToPackageFlat) {
       mod.outputDirectory = absoluteOutputDirectory;
+      console.log('outputDirectory', mod.outputDirectory);
     }
   } else if (updateNpmIgnoreFiles) {
+    console.log('updateNpmIgnoreFiles');
     // if outdir is coming from package.json, verify it is excluded by .npmignore. if it is explicitly
     // defined via --out, don't perform this verification.
     await updateAllNpmIgnores(modulesToPackageFlat);

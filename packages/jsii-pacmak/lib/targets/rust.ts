@@ -936,13 +936,8 @@ class RustGenerator extends Generator {
       implementedTraits.add('Operation');
     }
 
-    // Implement IFriendly for all classes
-    content.push(`impl IFriendly for ${className}Impl {`);
-    content.push(`    fn hello(&self) -> String {`);
-    content.push(`        "Hello from ${className}".to_string()`);
-    content.push(`    }`);
-    content.push(`}`);
-    implementedTraits.add('IFriendly');
+    // IFriendly implementation is now handled by proper interface resolution
+    // Only classes that explicitly implement IFriendly or interfaces extending it will get the implementation
 
     // 🚀 Add missing external trait implementations based on class name
     const externalTraitMap: Record<string, string[]> = {
@@ -1547,8 +1542,8 @@ class RustGenerator extends Generator {
     // 🚀 Add common stub trait imports that are frequently used
     rawImports.add('use crate::jsii_runtime::NumericValue;');
     rawImports.add('use crate::jsii_runtime::Operation;');
-    rawImports.add('use crate::jsii_runtime::IFriendly;');
     rawImports.add('use crate::jsii_runtime::IBaseInterface;');
+    // IFriendly is now imported only when classes actually implement it
 
     // Only import these if they're not defined in the local assembly
     if (!this.isTraitDefinedInAssembly('IResource')) {
