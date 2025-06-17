@@ -269,7 +269,6 @@ class RustGenerator extends Generator {
       'DiamondRight',
       'StructWithOnlyOptionals',
       'IBaseInterface',
-      'Person',
       'DerivedStruct',
       'NestedStruct',
       'VeryBaseProps',
@@ -1552,7 +1551,8 @@ class RustGenerator extends Generator {
       // ✅ External interfaces (from other packages) should also be trait objects
       if (
         type.fqn.startsWith('@scope/jsii-calc-lib.') ||
-        type.fqn.startsWith('@scope/jsii-calc-base.')
+        type.fqn.startsWith('@scope/jsii-calc-base.') ||
+        type.fqn.startsWith('@scope/jsii-calc-base-of-base.')
       ) {
         // All external JSII types become trait objects
         return `Box<dyn ${typeName}>`;
@@ -1792,7 +1792,8 @@ class RustGenerator extends Generator {
     // treat them as internal types
     if (
       fqn.startsWith('@scope/jsii-calc-lib.') ||
-      fqn.startsWith('@scope/jsii-calc-base.')
+      fqn.startsWith('@scope/jsii-calc-base.') ||
+      fqn.startsWith('@scope/jsii-calc-base-of-base.')
     ) {
       const parts = fqn.split('.');
       const typeName = parts[parts.length - 1];
@@ -1895,7 +1896,8 @@ class RustGenerator extends Generator {
     // into the same crate, treat them as internal types
     if (
       fqn.startsWith('@scope/jsii-calc-lib.') ||
-      fqn.startsWith('@scope/jsii-calc-base.')
+      fqn.startsWith('@scope/jsii-calc-base.') ||
+      fqn.startsWith('@scope/jsii-calc-base-of-base.')
     ) {
       const parts = fqn.split('.');
       const typeName = parts[parts.length - 1];
@@ -2964,7 +2966,6 @@ class RustGenerator extends Generator {
       'DiamondRight',
       'StructWithOnlyOptionals',
       'IBaseInterface',
-      'Person',
       'DerivedStruct',
       'NestedStruct',
       'VeryBaseProps',
