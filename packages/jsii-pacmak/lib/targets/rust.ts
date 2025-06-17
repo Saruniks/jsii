@@ -1539,22 +1539,8 @@ class RustGenerator extends Generator {
     // Add import for JSII runtime - all types need this
     // JsiiRuntime import removed - not needed in new implementation
 
-    // 🚀 Add common stub trait imports that are frequently used
-    rawImports.add('use crate::jsii_runtime::NumericValue;');
-    rawImports.add('use crate::jsii_runtime::Operation;');
-    rawImports.add('use crate::jsii_runtime::IBaseInterface;');
-    // IFriendly is now imported only when classes actually implement it
-
-    // Only import these if they're not defined in the local assembly
-    if (!this.isTraitDefinedInAssembly('IResource')) {
-      rawImports.add('use crate::jsii_runtime::IResource;');
-    }
-    if (!this.isTraitDefinedInAssembly('IConstruct')) {
-      rawImports.add('use crate::jsii_runtime::IConstruct;');
-    }
-    if (!this.isTraitDefinedInAssembly('IInterfaceWithInternal')) {
-      rawImports.add('use crate::jsii_runtime::IInterfaceWithInternal;');
-    }
+    // No more hardcoded trait imports from jsii_runtime -
+    // All assembly-specific traits are now generated in their proper modules
 
     // 🚀 Add CompositionStringStyleTrait - used by many classes that inherit stringStyle
     // rawImports.add(
@@ -1640,17 +1626,6 @@ class RustGenerator extends Generator {
     resolvedImports.forEach((imp) => rawImports.add(imp));
 
     return Array.from(rawImports).sort();
-  }
-
-  private isTraitDefinedInAssembly(traitName: string): boolean {
-    // Check if this trait is defined in the current assembly
-    if (!this.currentAssembly?.types) return false;
-
-    return Object.keys(this.currentAssembly.types).some(
-      (fqn) =>
-        fqn.endsWith(`.${traitName}`) &&
-        this.currentAssembly!.types![fqn].kind === TypeKind.Interface,
-    );
   }
 
   private collectFqnsFromTypeReference(
@@ -1767,13 +1742,31 @@ class RustGenerator extends Generator {
       fqn.startsWith('@scope/jsii-calc-lib.') ||
       fqn.startsWith('@scope/jsii-calc-base.')
     ) {
-      const typeName = fqn.split('.').pop();
-      if (typeName && typeName !== alias) {
-        return `use crate::jsii_runtime::${typeName} as ${alias};`;
-      } else if (typeName) {
-        return `use crate::jsii_runtime::${typeName};`;
+      const parts = fqn.split('.');
+      const typeName = parts[parts.length - 1];
+      const namespace = parts.slice(1, -1).join('.');
+
+      if (namespace) {
+        // External namespaced type with alias
+        const namespacePath = namespace.replace(/\./g, '::');
+        const crateName = fqn
+          .split('.')[0]
+          .replace('@', '')
+          .replace(/[^a-zA-Z0-9_]/g, '_');
+        if (typeName !== alias) {
+          return `use ${crateName}::${namespacePath}::${typeName}::{${typeName} as ${alias}, ${typeName}Ref as ${alias}Ref};`;
+        }
+        return `use ${crateName}::${namespacePath}::${typeName}::{${typeName}, ${typeName}Ref};`;
       }
-      return null;
+      // External root-level type with alias
+      const crateName = fqn
+        .split('.')[0]
+        .replace('@', '')
+        .replace(/[^a-zA-Z0-9_]/g, '_');
+      if (typeName !== alias) {
+        return `use ${crateName}::${typeName}::{${typeName} as ${alias}, ${typeName}Ref as ${alias}Ref};`;
+      }
+      return `use ${crateName}::${typeName}::{${typeName}, ${typeName}Ref};`;
     }
 
     // Handle internal types - simplified path structure
@@ -1859,12 +1852,25 @@ class RustGenerator extends Generator {
       fqn.startsWith('@scope/jsii-calc-lib.') ||
       fqn.startsWith('@scope/jsii-calc-base.')
     ) {
-      const typeName = fqn.split('.').pop();
-      if (typeName) {
-        // Import external types from jsii_runtime stub
-        return `use crate::jsii_runtime::${typeName};`;
+      const parts = fqn.split('.');
+      const typeName = parts[parts.length - 1];
+      const namespace = parts.slice(1, -1).join('.');
+
+      if (namespace) {
+        // External namespaced type - import from external crate with proper module path
+        const namespacePath = namespace.replace(/\./g, '::');
+        const crateName = fqn
+          .split('.')[0]
+          .replace('@', '')
+          .replace(/[^a-zA-Z0-9_]/g, '_');
+        return `use ${crateName}::${namespacePath}::${typeName}::{${typeName}, ${typeName}Ref};`;
       }
-      return null;
+      // External root-level type - import from external crate
+      const crateName = fqn
+        .split('.')[0]
+        .replace('@', '')
+        .replace(/[^a-zA-Z0-9_]/g, '_');
+      return `use ${crateName}::${typeName}::{${typeName}, ${typeName}Ref};`;
     }
 
     // Handle internal types - simplified path structure
@@ -2460,78 +2466,10 @@ class RustGenerator extends Generator {
     this.code.line('    }');
     this.code.line('}');
     this.code.line('');
+    this.code.line('// jsii_runtime is now agnostic to assembly content');
     this.code.line(
-      '// Legacy compatibility - provide stub traits for external dependencies',
+      '// All assembly-specific traits are generated in their proper modules',
     );
-    this.code.line('pub trait Number {}');
-    this.code.line('pub trait NumericValue {}');
-    this.code.line('pub trait MyFirstStruct {}');
-    this.code.line('pub trait StructWithOnlyOptionals {}');
-    this.code.line('pub trait NestedClass {}');
-    this.code.line('pub trait EnumFromScopedModule {}');
-    this.code.line('pub trait Reflector {}');
-    this.code.line('pub trait ReflectableEntry {}');
-    this.code.line('pub trait BaseProps {}');
-    this.code.line('pub trait Base {}');
-    this.code.line('pub trait PropProperty {}');
-    this.code.line('pub trait IFriendly { fn hello(&self) -> String; }');
-    this.code.line('pub trait IDoublable { fn double_value(&self) -> f64; }');
-    this.code.line('pub trait IReflectable {}');
-    this.code.line('pub trait IBaseInterface { fn bar(&self) -> String; }');
-    this.code.line(
-      'pub trait IResource { fn resource_type(&self) -> String; fn resource_arn(&self) -> String; }',
-    );
-    this.code.line(
-      'pub trait IConstruct { fn construct_node(&self) -> String; }',
-    );
-    this.code.line(
-      'pub trait IInterfaceWithInternal { fn visible(&self) -> String; }',
-    );
-    this.code.line('pub trait BaseFor2647 {}');
-    this.code.line('pub trait DiamondLeft {}');
-    this.code.line('pub trait DiamondRight {}');
-    this.code.line('pub trait Operation {}');
-    this.code.line('');
-    this.code.line(
-      '// Default stub implementations for backward compatibility',
-    );
-    this.code.line('pub struct StubImpl;');
-    this.code.line(
-      'impl IFriendly for StubImpl { fn hello(&self) -> String { "Hello from stub".to_string() } }',
-    );
-    this.code.line(
-      'impl IDoublable for StubImpl { fn double_value(&self) -> f64 { 42.0 } }',
-    );
-    this.code.line(
-      'impl IBaseInterface for StubImpl { fn bar(&self) -> String { "bar from stub".to_string() } }',
-    );
-    this.code.line(
-      'impl IResource for StubImpl { fn resource_type(&self) -> String { "stub-resource".to_string() } fn resource_arn(&self) -> String { "arn:stub:resource".to_string() } }',
-    );
-    this.code.line(
-      'impl IConstruct for StubImpl { fn construct_node(&self) -> String { "stub-construct-node".to_string() } }',
-    );
-    this.code.line(
-      'impl IInterfaceWithInternal for StubImpl { fn visible(&self) -> String { "visible from stub".to_string() } }',
-    );
-    this.code.line('');
-    this.code.line('// Implement all stub traits');
-    this.code.line('impl Number for StubImpl {}');
-    this.code.line('impl NumericValue for StubImpl {}');
-    this.code.line('impl MyFirstStruct for StubImpl {}');
-    this.code.line('impl StructWithOnlyOptionals for StubImpl {}');
-    this.code.line('impl NestedClass for StubImpl {}');
-    this.code.line('impl EnumFromScopedModule for StubImpl {}');
-    this.code.line('impl Reflector for StubImpl {}');
-    this.code.line('impl ReflectableEntry for StubImpl {}');
-    this.code.line('impl BaseProps for StubImpl {}');
-    this.code.line('impl Base for StubImpl {}');
-    this.code.line('impl PropProperty for StubImpl {}');
-    this.code.line('impl IReflectable for StubImpl {}');
-    this.code.line('impl BaseFor2647 for StubImpl {}');
-    this.code.line('impl DiamondLeft for StubImpl {}');
-    this.code.line('impl DiamondRight for StubImpl {}');
-    this.code.line('impl Operation for StubImpl {}');
 
     this.code.closeFile('src/jsii_runtime.rs');
   }
