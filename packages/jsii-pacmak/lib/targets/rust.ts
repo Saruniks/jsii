@@ -2865,6 +2865,48 @@ class RustGenerator extends Generator {
     this.storeNameConflicts(assm);
 
     this.generateModuleFiles(nestedModules);
+
+    // Generate mod.rs files for top-level namespace modules
+    // These are the modules declared in lib.rs that contain types
+    for (const module of modules) {
+      // Skip non-namespace modules (these are individual types, not namespaces)
+      if (externalTypeNames.has(module)) {
+        continue; // Skip external type modules
+      }
+
+      // Check if this module is a namespace by seeing if it has any types in it
+      const hasNamespaceTypes = Object.values(assm.types ?? {}).some(
+        (type) => type.namespace && type.namespace.split('.')[0] === module,
+      );
+
+      if (hasNamespaceTypes) {
+        // This is a top-level namespace module - generate its mod.rs file
+        const modFilePath = `src/${module}/mod.rs`;
+        const content: string[] = [];
+
+        // Find all types and subnamespaces in this top-level namespace
+        const children = new Set<string>();
+        for (const type of Object.values(assm.types ?? {})) {
+          if (type.namespace && type.namespace.split('.')[0] === module) {
+            const namespaceParts = type.namespace.split('.');
+            if (namespaceParts.length === 1) {
+              // Direct child of this namespace
+              children.add(type.name);
+            } else {
+              // Nested namespace - add the next level
+              children.add(namespaceParts[1]);
+            }
+          }
+        }
+
+        // Generate module declarations
+        for (const child of Array.from(children).sort()) {
+          content.push(`pub mod ${child};`);
+        }
+
+        this.collectModFileContent(modFilePath, content);
+      }
+    }
   }
 }
 
