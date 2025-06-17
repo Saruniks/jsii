@@ -2532,7 +2532,14 @@ class RustGenerator extends Generator {
     if (!this.modFileContents.has(path)) {
       this.modFileContents.set(path, []);
     }
-    this.modFileContents.get(path)!.push(...content);
+    const existingContent = this.modFileContents.get(path)!;
+
+    // Only add content that doesn't already exist to prevent duplicates
+    for (const line of content) {
+      if (!existingContent.includes(line)) {
+        existingContent.push(line);
+      }
+    }
   }
 
   private writeAllModFiles() {
