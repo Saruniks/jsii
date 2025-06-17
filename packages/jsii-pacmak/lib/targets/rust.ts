@@ -2365,9 +2365,9 @@ class RustGenerator extends Generator {
 
       // Add module declarations for child modules
       const sortedChildren = Array.from(children).sort();
-      for (const child of sortedChildren) {
-        content.push(`pub mod ${child};`);
-      }
+      // for (const child of sortedChildren) {
+        // content.push(`pub mod ${child};`);
+      // }
 
       this.collectModFileContent(modFilePath, content);
     }
@@ -2377,37 +2377,37 @@ class RustGenerator extends Generator {
 
     // Also handle types that may be placed in flattened paths due to conflicts
     // We need to ensure all types are properly declared in accessible module files
-    for (const type of Object.values(this.currentAssembly?.types ?? {})) {
-      if (
-        type.kind === TypeKind.Interface ||
-        type.kind === TypeKind.Class ||
-        type.kind === TypeKind.Enum
-      ) {
-        if (type.namespace) {
-          const conflictFreePath = this.getConflictFreeNamespacePath(
-            type.namespace,
-            type.name,
-          );
-          const originalPath = type.namespace.replace(/\./g, '/');
+    // for (const type of Object.values(this.currentAssembly?.types ?? {})) {
+    //   if (
+    //     type.kind === TypeKind.Interface ||
+    //     type.kind === TypeKind.Class ||
+    //     type.kind === TypeKind.Enum
+    //   ) {
+    //     if (type.namespace) {
+    //       const conflictFreePath = this.getConflictFreeNamespacePath(
+    //         type.namespace,
+    //         type.name,
+    //       );
+    //       const originalPath = type.namespace.replace(/\./g, '/');
 
-          // If the conflict-free path is different from the original path,
-          // we need to ensure the type is declared in the accessible path
-          if (conflictFreePath !== originalPath) {
-            // Check if we need to create an additional mod.rs file
-            if (conflictFreePath !== '') {
-              const modFilePath = `src/${conflictFreePath}/mod.rs`;
-              // Only add if not already added by the main loop
-              if (!nestedModules.has(conflictFreePath.replace(/\//g, '.'))) {
-                const content: string[] = [];
-                content.push(`pub mod ${type.name};`);
+    //       // If the conflict-free path is different from the original path,
+    //       // we need to ensure the type is declared in the accessible path
+    //       if (conflictFreePath !== originalPath) {
+    //         // Check if we need to create an additional mod.rs file
+    //         if (conflictFreePath !== '') {
+    //           const modFilePath = `src/${conflictFreePath}/mod.rs`;
+    //           // Only add if not already added by the main loop
+    //           if (!nestedModules.has(conflictFreePath.replace(/\//g, '.'))) {
+    //             const content: string[] = [];
+    //             content.push(`pub mod ${type.name};`);
 
-                this.collectModFileContent(modFilePath, content);
-              }
-            }
-          }
-        }
-      }
-    }
+    //             this.collectModFileContent(modFilePath, content);
+    //           }
+    //         }
+    //       }
+    //     }
+    //   }
+    // }
   }
 
   private generateIntermediateModFiles(): void {
@@ -2532,14 +2532,7 @@ class RustGenerator extends Generator {
     if (!this.modFileContents.has(path)) {
       this.modFileContents.set(path, []);
     }
-    const existingContent = this.modFileContents.get(path)!;
-
-    // Only add content that doesn't already exist to prevent duplicates
-    for (const line of content) {
-      if (!existingContent.includes(line)) {
-        existingContent.push(line);
-      }
-    }
+    this.modFileContents.get(path)!.push(...content);
   }
 
   private writeAllModFiles() {
