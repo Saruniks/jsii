@@ -1437,33 +1437,33 @@ class RustGenerator extends Generator {
 
       // 🚀 JSII classes and interfaces become trait objects
       // Enums are concrete types and should not be boxed
-      if (type.fqn.startsWith('jsii-calc.')) {
-        const typeInfo = this.getTypeInfo(type.fqn);
-        if (typeInfo?.kind === 'enum') {
-          // Enums are concrete types, not trait objects
-          return typeName;
-        }
-        // Classes and interfaces are trait objects
-        return `Box<dyn ${typeName}>`;
+      // if (type.fqn.startsWith('jsii-calc.')) {
+      const typeInfo = this.getTypeInfo(type.fqn);
+      if (typeInfo?.kind === 'enum') {
+        // Enums are concrete types, not trait objects
+        return typeName;
       }
+      // Classes and interfaces are trait objects
+      return `Box<dyn ${typeName}>`;
+      // }
 
-      // ✅ External types - enums are concrete, others are trait objects
-      if (
-        type.fqn.startsWith('@scope/jsii-calc-lib.') ||
-        type.fqn.startsWith('@scope/jsii-calc-base.') ||
-        type.fqn.startsWith('@scope/jsii-calc-base-of-base.')
-      ) {
-        const typeInfo = this.getTypeInfo(type.fqn);
-        if (typeInfo?.kind === 'enum') {
-          // External enums are also concrete types
-          return typeName;
-        }
-        // External classes and interfaces are trait objects
-        return `Box<dyn ${typeName}>`;
-      }
+      // // ✅ External types - enums are concrete, others are trait objects
+      // if (
+      //   type.fqn.startsWith('@scope/jsii-calc-lib.') ||
+      //   type.fqn.startsWith('@scope/jsii-calc-base.') ||
+      //   type.fqn.startsWith('@scope/jsii-calc-base-of-base.')
+      // ) {
+      //   const typeInfo = this.getTypeInfo(type.fqn);
+      //   if (typeInfo?.kind === 'enum') {
+      //     // External enums are also concrete types
+      //     return typeName;
+      //   }
+      //   // External classes and interfaces are trait objects
+      //   return `Box<dyn ${typeName}>`;
+      // }
 
       // ✅ For any other type, just return the type name (probably a primitive or std type)
-      return typeName;
+      // return typeName;
     }
 
     if (isCollectionTypeReference(type)) {
@@ -1569,6 +1569,33 @@ class RustGenerator extends Generator {
           'use crate::IInterfaceWithInternal::{IInterfaceWithInternal::IInterfaceWithInternal, IInterfaceWithInternalRef};',
         );
       }
+    }
+
+    // 🚀 Add CompositionStringStyle import for any class that implements or extends CompositeOperation
+    let needsCompositionStringStyle = false;
+
+    // Check if implements CompositeOperation as an interface
+    if ('interfaces' in type && type.interfaces) {
+      for (const iface of type.interfaces) {
+        if (iface === 'jsii-calc.composition.CompositeOperation') {
+          needsCompositionStringStyle = true;
+          break;
+        }
+      }
+    }
+
+    // Check if extends CompositeOperation as a base class
+    if (
+      'base' in type &&
+      type.base === 'jsii-calc.composition.CompositeOperation'
+    ) {
+      needsCompositionStringStyle = true;
+    }
+
+    if (needsCompositionStringStyle) {
+      rawImports.add(
+        'use crate::composition::CompositeOperation::CompositionStringStyle::CompositionStringStyle;',
+      );
     }
 
     // Collect all FQNs that need importing
@@ -1771,14 +1798,14 @@ class RustGenerator extends Generator {
 
             if (parentNamespacePath) {
               if (typeName !== alias) {
-                return `use crate::${parentNamespacePath}::${parentTypeName}::${typeName} as ${alias};`;
+                return `use crate::${parentNamespacePath}::${parentTypeName}::${typeName}::${typeName} as ${alias};`;
               }
-              return `use crate::${parentNamespacePath}::${parentTypeName}::${typeName};`;
+              return `use crate::${parentNamespacePath}::${parentTypeName}::${typeName}::${typeName};`;
             }
             if (typeName !== alias) {
-              return `use crate::${parentTypeName}::${typeName} as ${alias};`;
+              return `use crate::${parentTypeName}::${typeName}::${typeName} as ${alias};`;
             }
-            return `use crate::${parentTypeName}::${typeName};`;
+            return `use crate::${parentTypeName}::${typeName}::${typeName};`;
           }
           // For regular enums, use the full path
           if (typeName !== alias) {
@@ -1818,9 +1845,9 @@ class RustGenerator extends Generator {
           // The parent class module should already have pub mod declarations
           const parentTypeName = parts[parts.length - 2];
           if (typeName !== alias) {
-            return `use crate::${parentTypeName}::${typeName} as ${alias};`;
+            return `use crate::${parentTypeName}::${typeName}::${typeName} as ${alias};`;
           }
-          return `use crate::${parentTypeName}::${typeName};`;
+          return `use crate::${parentTypeName}::${typeName}::${typeName};`;
         }
         // For regular enums, use the full path
         if (typeName !== alias) {
@@ -1914,9 +1941,9 @@ class RustGenerator extends Generator {
             ).replace(/\//g, '::');
 
             if (parentNamespacePath) {
-              return `use crate::${parentNamespacePath}::${parentTypeName}::${typeName};`;
+              return `use crate::${parentNamespacePath}::${parentTypeName}::${typeName}::${typeName};`;
             }
-            return `use crate::${parentTypeName}::${typeName};`;
+            return `use crate::${parentTypeName}::${typeName}::${typeName};`;
           }
           // For regular enums, use the full path
           return `use crate::${namespacePath}::${typeName}::${typeName}::${typeName};`;
@@ -1943,7 +1970,7 @@ class RustGenerator extends Generator {
         if (isNestedEnum) {
           // For nested enums, import directly from parent type's directory
           const parentTypeName = parts[parts.length - 2];
-          return `use crate::${parentTypeName}::${typeName};`;
+          return `use crate::${parentTypeName}::${typeName}::${typeName};`;
         }
         // For regular enums, use the full path
         return `use crate::${typeName}::${typeName}::${typeName};`;
