@@ -181,6 +181,7 @@ class RustGenerator extends Generator {
 
   protected onBeginInterface(ifc: InterfaceType): void {
     let filename;
+    let filenameMod;
 
     if (ifc.namespace) {
       // Handle namespace conflicts by flattening when necessary
@@ -188,14 +189,21 @@ class RustGenerator extends Generator {
         ifc.namespace,
         ifc.name,
       );
-      filename = `${namespacePath}/${ifc.name}/mod`;
+      filename = `${namespacePath}/${ifc.name}/${ifc.name}`;
+      filenameMod = `${namespacePath}/${ifc.name}/mod`;
     } else {
-      // Root level interfaces also get their own directory
-      filename = `${ifc.name}/mod`;
+      filename = `${ifc.name}/${ifc.name}`;
+      filenameMod = `${ifc.name}/mod`;
     }
 
+    // this.code.openFile(filename);
+
     const modFilePath = `src/${filename}.rs`;
+    const filenameModPath = `src/${filenameMod}.rs`;
+
     const content: string[] = [];
+
+    this.collectModFileContent(filenameModPath, [`pub mod ${ifc.name};`, `pub use ${ifc.name}::*;`]);
 
     // Add imports for referenced types
     const imports = this.getImportsForType(ifc);
@@ -1485,9 +1493,9 @@ class RustGenerator extends Generator {
       // or other traits that use CompositionStringStyleTrait
       const needsCompositionStringStyleTrait = ['Calculator', 'Power', 'Sum'];
       if (needsCompositionStringStyleTrait.includes(className)) {
-        rawImports.add(
-          'use crate::composition::CompositionStringStyle::CompositionStringStyleTrait;',
-        );
+        // rawImports.add(
+        //   'use crate::composition::CompositionStringStyle::CompositionStringStyleTrait;',
+        // );
       }
     }
 
@@ -1661,13 +1669,13 @@ class RustGenerator extends Generator {
         if (typeName !== alias) {
           return `use ${crateName}::${namespacePath}::${typeName}::${typeName} as ${alias};`;
         }
-        return `use ${crateName}::${namespacePath}::${typeName}::${typeName};`;
+        return `use ${crateName}::${namespacePath}::${typeName}::${typeName}::${typeName};`;
       }
       // External root-level type with alias - now internal to same crate
       if (typeName !== alias) {
-        return `use crate::${typeName}::${typeName} as ${alias};`;
+        return `use crate::${typeName}::${typeName}::${typeName} as ${alias};`;
       }
-      return `use crate::${typeName}::${typeName};`;
+      return `use crate::${typeName}::${typeName}::${typeName};`;
     }
 
     // Handle internal types - simplified path structure
@@ -1687,53 +1695,53 @@ class RustGenerator extends Generator {
 
         if (typeInfo?.kind === 'interface') {
           if (typeName !== alias) {
-            return `use crate::${namespacePath}::${typeName}::{${typeName} as ${alias}, ${typeName}Ref as ${alias}Ref};`;
+            return `use crate::${namespacePath}::${typeName}::{${typeName}::${typeName} as ${alias}, ${typeName}Ref as ${alias}Ref};`;
           }
-          return `use crate::${namespacePath}::${typeName}::{${typeName}, ${typeName}Ref};`;
+          return `use crate::${namespacePath}::${typeName}::{${typeName}::${typeName}, ${typeName}Ref};`;
         } else if (typeInfo?.kind === 'class') {
           // 🚀 Classes: just import the trait with alias
           if (typeName !== alias) {
-            return `use crate::${namespacePath}::${typeName}::${typeName} as ${alias};`;
+            return `use crate::${namespacePath}::${typeName}::${typeName}::${typeName} as ${alias};`;
           }
-          return `use crate::${namespacePath}::${typeName}::${typeName};`;
+          return `use crate::${namespacePath}::${typeName}::${typeName}::${typeName};`;
         } else if (typeInfo?.kind === 'enum') {
           // 🚀 Enums: import both enum and trait with aliases
           if (typeName !== alias) {
-            return `use crate::${namespacePath}::${typeName}::{${typeName} as ${alias}, ${typeName}Trait as ${alias}Trait};`;
+            return `use crate::${namespacePath}::${typeName}::{${typeName}::${typeName} as ${alias}, ${typeName}Trait as ${alias}Trait};`;
           }
-          return `use crate::${namespacePath}::${typeName}::{${typeName}, ${typeName}Trait};`;
+          return `use crate::${namespacePath}::${typeName}::{${typeName}::${typeName}, ${typeName}Trait};`;
         }
         // Fallback for unknown types
         if (typeName !== alias) {
-          return `use crate::${namespacePath}::${typeName}::${typeName} as ${alias};`;
+          return `use crate::${namespacePath}::${typeName}::${typeName}::${typeName} as ${alias};`;
         }
-        return `use crate::${namespacePath}::${typeName}::${typeName};`;
+        return `use crate::${namespacePath}::${typeName}::${typeName}::${typeName};`;
       }
 
       // Root level types use simplified structure: TypeName
       if (typeInfo?.kind === 'interface') {
         if (typeName !== alias) {
-          return `use crate::${typeName}::{${typeName} as ${alias}, ${typeName}Ref as ${alias}Ref};`;
+          return `use crate::${typeName}::{${typeName}::${typeName} as ${alias}, ${typeName}Ref as ${alias}Ref};`;
         }
-        return `use crate::${typeName}::{${typeName}, ${typeName}Ref};`;
+        return `use crate::${typeName}::{${typeName}::${typeName}, ${typeName}Ref};`;
       } else if (typeInfo?.kind === 'class') {
         // 🚀 Classes: just import the trait with alias
         if (typeName !== alias) {
-          return `use crate::${typeName}::${typeName} as ${alias};`;
+          return `use crate::${typeName}::${typeName}::${typeName} as ${alias};`;
         }
-        return `use crate::${typeName}::${typeName};`;
+        return `use crate::${typeName}::${typeName}::${typeName};`;
       } else if (typeInfo?.kind === 'enum') {
         // 🚀 Enums: import both enum and trait with aliases
         if (typeName !== alias) {
-          return `use crate::${typeName}::{${typeName} as ${alias}, ${typeName}Trait as ${alias}Trait};`;
+          return `use crate::${typeName}::{${typeName}::${typeName} as ${alias}, ${typeName}Trait as ${alias}Trait};`;
         }
-        return `use crate::${typeName}::{${typeName}, ${typeName}Trait};`;
+        return `use crate::${typeName}::{${typeName}::${typeName}, ${typeName}Trait};`;
       }
       // Fallback - just import the type from its module
       if (typeName !== alias) {
-        return `use crate::${typeName}::${typeName} as ${alias};`;
+        return `use crate::${typeName}::${typeName}::${typeName} as ${alias};`;
       }
-      return `use crate::${typeName}::${typeName};`;
+      return `use crate::${typeName}::${typeName}::${typeName};`;
     }
 
     return null;
@@ -1766,10 +1774,10 @@ class RustGenerator extends Generator {
           // External namespaced type - now internal to same crate with proper module path
           const namespacePath = namespace.replace(/\./g, '::');
           // return `use ${crateName}::${namespacePath}::${typeName}::${typeName};`;
-          return `use crate::${namespacePath}::${typeName}::${typeName};`;
+          return `use crate::${namespacePath}::${typeName}::${typeName}::${typeName};`;
         }
         // External root-level type - now internal to same crate
-        return `use crate::${typeName}::${typeName};`;
+        return `use crate::${typeName}::${typeName}::${typeName};`;
         // return `use ${crateName}::${typeName}::${typeName};`;  
       }
 
@@ -1777,11 +1785,11 @@ class RustGenerator extends Generator {
         // External namespaced type - now internal to same crate with proper module path
         const namespacePath = namespace.replace(/\./g, '::');
         return `use ${crateName}::${namespacePath}::${typeName}::${typeName};`;
-        return `use crate::${namespacePath}::${typeName}::${typeName};`;
+        // return `use crate::${namespacePath}::${typeName}::${typeName};`;
       }
       // External root-level type - now internal to same crate
       // return `use crate::${typeName}::${typeName};`;
-      return `use ${crateName}::${typeName}::${typeName};`;
+      return `use ${crateName}::${typeName}::${typeName}::${typeName};`;
     }
 
     // Handle internal types - simplified path structure
@@ -1801,30 +1809,30 @@ class RustGenerator extends Generator {
 
         if (typeInfo?.kind === 'interface') {
           // 🚀 Interfaces: import trait + ref implementation
-          return `use crate::${namespacePath}::${typeName}::{${typeName}, ${typeName}Ref};`;
+          return `use crate::${namespacePath}::${typeName}::{${typeName}::${typeName}, ${typeName}Ref};`;
         } else if (typeInfo?.kind === 'class') {
           // 🚀 Classes: just import the trait (no more Abstract/Base distinction)
-          return `use crate::${namespacePath}::${typeName}::${typeName};`;
+          return `use crate::${namespacePath}::${typeName}::${typeName}::${typeName};`;
         } else if (typeInfo?.kind === 'enum') {
           // 🚀 Enums: import both the enum and its trait
-          return `use crate::${namespacePath}::${typeName}::{${typeName}, ${typeName}Trait};`;
+          return `use crate::${namespacePath}::${typeName}::{${typeName}::${typeName}, ${typeName}Trait};`;
         }
         // Fallback for unknown types
-        return `use crate::${namespacePath}::${typeName}::${typeName};`;
+        return `use crate::${namespacePath}::${typeName}::${typeName}::${typeName};`;
       }
 
       // Root level types use simplified structure: TypeName
       if (typeInfo?.kind === 'interface') {
-        return `use crate::${typeName}::{${typeName}, ${typeName}Ref};`;
+        return `use crate::${typeName}::{${typeName}::${typeName}, ${typeName}Ref};`;
       } else if (typeInfo?.kind === 'class') {
         // 🚀 Classes: just import the trait
-        return `use crate::${typeName}::${typeName};`;
+        return `use crate::${typeName}::${typeName}::${typeName};`;
       } else if (typeInfo?.kind === 'enum') {
         // 🚀 Enums: import both the enum and its trait
-        return `use crate::${typeName}::{${typeName}, ${typeName}Trait};`;
+        return `use crate::${typeName}::{${typeName}::${typeName}, ${typeName}Trait};`;
       }
       // Fallback - just import the type from its module
-      return `use crate::${typeName}::${typeName};`;
+      return `use crate::${typeName}::${typeName}::${typeName};`;
     }
 
     return null;
@@ -2395,14 +2403,14 @@ class RustGenerator extends Generator {
       // Add module declarations for child modules
       const sortedChildren = Array.from(children).sort();
       // for (const child of sortedChildren) {
-      // content.push(`pub mod ${child};`);
+        // content.push(`pub mod ${child};`);
       // }
 
       this.collectModFileContent(modFilePath, content);
     }
 
     // Generate intermediate mod.rs files for all namespace levels
-    this.generateIntermediateModFiles();
+    // this.generateIntermediateModFiles();
 
     // Also handle types that may be placed in flattened paths due to conflicts
     // We need to ensure all types are properly declared in accessible module files
@@ -2466,9 +2474,9 @@ class RustGenerator extends Generator {
       const modFilePath = `src/${modulePath}/mod.rs`;
 
       // Skip if we already have content for this mod.rs file
-      if (this.modFileContents.has(modFilePath)) {
-        continue;
-      }
+      // if (this.modFileContents.has(modFilePath)) {
+      //   continue;
+      // }
 
       // Find all immediate children of this namespace
       const children = new Set<string>();
@@ -2498,7 +2506,9 @@ class RustGenerator extends Generator {
       if (children.size > 0) {
         const content: string[] = [];
         for (const child of Array.from(children).sort()) {
-          content.push(`pub mod ${child};`);
+          if (!content.includes(`pub mod ${child};`)) {
+            content.push(`pub mod ${child};`);
+          }
         }
         this.collectModFileContent(modFilePath, content);
       }
@@ -2958,7 +2968,9 @@ class RustGenerator extends Generator {
 
         // Generate module declarations
         for (const child of Array.from(children).sort()) {
-          content.push(`pub mod ${child};`);
+          if (!content.includes(`pub mod ${child};`)) {
+            content.push(`pub mod ${child};`);
+          }
         }
 
         this.collectModFileContent(modFilePath, content);
