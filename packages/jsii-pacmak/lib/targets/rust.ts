@@ -196,14 +196,17 @@ class RustGenerator extends Generator {
       filenameMod = `${ifc.name}/mod`;
     }
 
-    // this.code.openFile(filename);
+    const implFilePath = `src/${filename}.rs`;
+    const modFilePath = `src/${filenameMod}.rs`;
 
-    const modFilePath = `src/${filename}.rs`;
-    const filenameModPath = `src/${filenameMod}.rs`;
+    // Generate mod.rs with only module declarations and re-exports
+    this.collectModFileContent(modFilePath, [
+      `pub mod ${ifc.name};`,
+      `pub use ${ifc.name}::*;`
+    ]);
 
+    // Generate actual implementation in {TypeName}.rs
     const content: string[] = [];
-
-    this.collectModFileContent(filenameModPath, [`pub mod ${ifc.name};`, `pub use ${ifc.name}::*;`]);
 
     // Add imports for referenced types
     const imports = this.getImportsForType(ifc);
@@ -402,7 +405,7 @@ class RustGenerator extends Generator {
 
     content.push(`}`);
 
-    this.collectModFileContent(modFilePath, content);
+    this.collectModFileContent(implFilePath, content);
   }
 
   protected onEndInterface(_ifc: InterfaceType): void {
@@ -492,7 +495,8 @@ class RustGenerator extends Generator {
   protected onBeginClass(cls: ClassType, _abstract: boolean | undefined): void {
     const conflicts = ((this as any).nameConflicts as Set<string>) || new Set();
 
-    let filename;
+    let implFilename;
+    let modFilename;
     const fullPath = cls.namespace ? `${cls.namespace}.${cls.name}` : cls.name;
 
     if (cls.namespace) {
@@ -501,10 +505,12 @@ class RustGenerator extends Generator {
         cls.namespace,
         cls.name,
       );
-      filename = `${namespacePath}/${cls.name}/mod`;
+      implFilename = `${namespacePath}/${cls.name}/${cls.name}`;
+      modFilename = `${namespacePath}/${cls.name}/mod`;
     } else {
       // Root level classes also get their own directory
-      filename = `${cls.name}/mod`;
+      implFilename = `${cls.name}/${cls.name}`;
+      modFilename = `${cls.name}/mod`;
     }
 
     // Handle conflicts at any namespace level
@@ -515,13 +521,24 @@ class RustGenerator extends Generator {
           cls.namespace,
           cls.name,
         );
-        filename = `${namespacePath}/${cls.name}/mod`;
+        implFilename = `${namespacePath}/${cls.name}/${cls.name}`;
+        modFilename = `${namespacePath}/${cls.name}/mod`;
       } else {
-        filename = `${cls.name}/mod`;
+        implFilename = `${cls.name}/${cls.name}`;
+        modFilename = `${cls.name}/mod`;
       }
     }
 
-    const modFilePath = `src/${filename}.rs`;
+    const implFilePath = `src/${implFilename}.rs`;
+    const modFilePath = `src/${modFilename}.rs`;
+
+    // Generate mod.rs with only module declarations and re-exports
+    this.collectModFileContent(modFilePath, [
+      `pub mod ${cls.name};`,
+      `pub use ${cls.name}::*;`
+    ]);
+
+    // Generate actual implementation in {TypeName}.rs
     const content: string[] = [];
 
     // Add imports for referenced types
@@ -536,7 +553,7 @@ class RustGenerator extends Generator {
     // 🚀 Generate trait-based approach with supertraits
     this.generateClassTraits(cls, content);
 
-    this.collectModFileContent(modFilePath, content);
+    this.collectModFileContent(implFilePath, content);
   }
 
   private generateClassTraits(cls: ClassType, content: string[]): void {
@@ -811,7 +828,7 @@ class RustGenerator extends Generator {
       // NumericValue extends Base, so implement that too
       if (!implementedTraits.has('Base')) {
         // content.push(use)
-        content.push(`impl ascopeajsiiacalcabase::Base::Base for ${className}Impl {`);
+        content.push(`impl ascopeajsiiacalcabase::Base::Base::Base for ${className}Impl {`);
         content.push(`    fn typeName(&self) -> Box<dyn std::any::Any> {`);
         content.push(`        // Delegate to JSII runtime`);
         content.push(`        todo!("Base::typeName not implemented")`);
@@ -1254,7 +1271,8 @@ class RustGenerator extends Generator {
   protected onBeginEnum(enm: EnumType): void {
     const conflicts = ((this as any).nameConflicts as Set<string>) || new Set();
 
-    let filename;
+    let implFilename;
+    let modFilename;
     const fullPath = enm.namespace ? `${enm.namespace}.${enm.name}` : enm.name;
 
     if (enm.namespace) {
@@ -1263,10 +1281,12 @@ class RustGenerator extends Generator {
         enm.namespace,
         enm.name,
       );
-      filename = `${namespacePath}/${enm.name}/mod`;
+      implFilename = `${namespacePath}/${enm.name}/${enm.name}`;
+      modFilename = `${namespacePath}/${enm.name}/mod`;
     } else {
       // Root level enums also get their own directory
-      filename = `${enm.name}/mod`;
+      implFilename = `${enm.name}/${enm.name}`;
+      modFilename = `${enm.name}/mod`;
     }
 
     // Handle conflicts at any namespace level
@@ -1277,13 +1297,24 @@ class RustGenerator extends Generator {
           enm.namespace,
           enm.name,
         );
-        filename = `${namespacePath}/${enm.name}/mod`;
+        implFilename = `${namespacePath}/${enm.name}/${enm.name}`;
+        modFilename = `${namespacePath}/${enm.name}/mod`;
       } else {
-        filename = `${enm.name}/mod`;
+        implFilename = `${enm.name}/${enm.name}`;
+        modFilename = `${enm.name}/mod`;
       }
     }
 
-    const modFilePath = `src/${filename}.rs`;
+    const implFilePath = `src/${implFilename}.rs`;
+    const modFilePath = `src/${modFilename}.rs`;
+
+    // Generate mod.rs with only module declarations and re-exports
+    this.collectModFileContent(modFilePath, [
+      `pub mod ${enm.name};`,
+      `pub use ${enm.name}::*;`
+    ]);
+
+    // Generate actual implementation in {TypeName}.rs
     const content: string[] = [];
 
     // 🚀 Generate trait for the enum (for use in Box<dyn Trait>)
@@ -1346,7 +1377,7 @@ class RustGenerator extends Generator {
     content.push(`    }`);
     content.push(`}`);
 
-    this.collectModFileContent(modFilePath, content);
+    this.collectModFileContent(implFilePath, content);
   }
 
   private toRustType(type: TypeReference): string {
