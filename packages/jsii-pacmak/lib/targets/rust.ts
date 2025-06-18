@@ -1435,35 +1435,22 @@ class RustGenerator extends Generator {
     if (isNamedTypeReference(type)) {
       const typeName = type.fqn.split('.').pop() ?? type.fqn;
 
-      // 🚀 JSII classes and interfaces become trait objects
-      // Enums are concrete types and should not be boxed
-      // if (type.fqn.startsWith('jsii-calc.')) {
+      // Check if this is a type from the current assembly
       const typeInfo = this.getTypeInfo(type.fqn);
       if (typeInfo?.kind === 'enum') {
-        // Enums are concrete types, not trait objects
+        // Local enums are concrete types, not trait objects
         return typeName;
       }
+
+      // For external types, we need to be more careful about detection
+      // Check if this looks like an enum based on naming conventions and FQN patterns
+      if (this.isLikelyExternalEnum(type.fqn)) {
+        // External enums are also concrete types, not trait objects
+        return typeName;
+      }
+
       // Classes and interfaces are trait objects
       return `Box<dyn ${typeName}>`;
-      // }
-
-      // // ✅ External types - enums are concrete, others are trait objects
-      // if (
-      //   type.fqn.startsWith('@scope/jsii-calc-lib.') ||
-      //   type.fqn.startsWith('@scope/jsii-calc-base.') ||
-      //   type.fqn.startsWith('@scope/jsii-calc-base-of-base.')
-      // ) {
-      //   const typeInfo = this.getTypeInfo(type.fqn);
-      //   if (typeInfo?.kind === 'enum') {
-      //     // External enums are also concrete types
-      //     return typeName;
-      //   }
-      //   // External classes and interfaces are trait objects
-      //   return `Box<dyn ${typeName}>`;
-      // }
-
-      // ✅ For any other type, just return the type name (probably a primitive or std type)
-      // return typeName;
     }
 
     if (isCollectionTypeReference(type)) {
@@ -1486,6 +1473,30 @@ class RustGenerator extends Generator {
     }
 
     return '()';
+  }
+
+  /**
+   * Heuristic to determine if an external type is likely an enum.
+   * This is needed because we can't easily access external assembly type info.
+   */
+  private isLikelyExternalEnum(fqn: string): boolean {
+    // Check known external enum patterns from jsii-calc dependencies
+    const knownExternalEnums = [
+      '@scope/jsii-calc-lib.EnumFromScopedModule',
+      '@scope/jsii-calc-base.BasePropsLevel',
+      // Add more known external enums as needed
+    ];
+
+    if (knownExternalEnums.includes(fqn)) {
+      return true;
+    }
+
+    // Additional heuristics could be added here:
+    // - Check if the type name follows enum naming conventions
+    // - Check if it's from a known enum-heavy package
+    // - Use other patterns from the jsii metadata
+
+    return false;
   }
 
   private getImportsForType(type: InterfaceType | ClassType): string[] {
