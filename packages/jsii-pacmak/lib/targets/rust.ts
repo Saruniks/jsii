@@ -1502,7 +1502,9 @@ class RustGenerator extends Generator {
       // Add IBaseInterface import for classes that implement it
       const needsIBaseInterface = ['Class3', 'Baz'];
       if (needsIBaseInterface.includes(className)) {
-        rawImports.add('use crate::IBaseInterface::IBaseInterface;');
+        rawImports.add(
+          'use ascopeajsiiacalcabase::IBaseInterface::IBaseInterface::IBaseInterface;',
+        );
       }
 
       // Add imports for module2702 classes
