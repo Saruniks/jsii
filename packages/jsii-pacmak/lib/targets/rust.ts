@@ -20,7 +20,7 @@ import * as path from 'path';
 
 import { Generator, Legalese } from '../generator';
 import { Target, TargetOptions } from '../target';
-import { shell } from '../util';
+import { shell as _shell } from '../util';
 
 export default class Rust extends Target {
   protected readonly generator: RustGenerator;
@@ -46,6 +46,7 @@ class RustGenerator extends Generator {
   private readonly abstractTypes: Set<string> = new Set(); // Track abstract classes and behavioral interfaces
   private currentAssembly?: Assembly; // Store assembly reference for helper methods
   private readonly modFileContents = new Map<string, string[]>(); // Collect content for mod.rs files to prevent overwrites
+  private readonly modFileDeclarations = new Map<string, Set<string>>(); // Track what declarations we've added to each mod.rs file
 
   protected onBeginAssembly(assm: Assembly, _fingerprint: boolean): void {
     // Store assembly reference
@@ -104,10 +105,12 @@ class RustGenerator extends Generator {
     // TODO: Rename the dependencies to the correct names
     for (const [key, value] of Object.entries(assm.dependencies ?? {})) {
       const assm_name = key.replace(/[^a-zA-Z0-9_]/g, 'a');
-      this.code.line(`${assm_name} = { path = "../${assm_name}", version = "${value}" }`);
+      this.code.line(
+        `${assm_name} = { path = "../${assm_name}", version = "${value}" }`,
+      );
     }
 
-    this.code.closeFile(this.currentAssembly?.name + '/Cargo.toml');
+    this.code.closeFile(`${this.currentAssembly?.name}/Cargo.toml`);
 
     // Note: lib.rs generation is now handled in generateMainLibFile()
     // at the end of assembly processing to ensure all modules are included
@@ -202,7 +205,7 @@ class RustGenerator extends Generator {
     // Generate mod.rs with only module declarations and re-exports
     this.collectModFileContent(modFilePath, [
       `pub mod ${ifc.name};`,
-      `pub use ${ifc.name}::*;`
+      `pub use ${ifc.name}::*;`,
     ]);
 
     // Generate actual implementation in {TypeName}.rs
@@ -535,7 +538,7 @@ class RustGenerator extends Generator {
     // Generate mod.rs with only module declarations and re-exports
     this.collectModFileContent(modFilePath, [
       `pub mod ${cls.name};`,
-      `pub use ${cls.name}::*;`
+      `pub use ${cls.name}::*;`,
     ]);
 
     // Generate actual implementation in {TypeName}.rs
@@ -804,31 +807,33 @@ class RustGenerator extends Generator {
       'Base',
     ].includes(className);
     if (!skipOperation) {
-    //   content.push(`impl Operation for ${className}Impl {`);
-    //   content.push(`    fn toString(&self) -> String {`);
-    //   content.push(`        // Delegate to JSII runtime`);
-    //   content.push(`        todo!("Operation::toString not implemented")`);
-    //   content.push(`    }`);
-    //   content.push(`}`);
-    //   implementedTraits.add('Operation');
+      //   content.push(`impl Operation for ${className}Impl {`);
+      //   content.push(`    fn toString(&self) -> String {`);
+      //   content.push(`        // Delegate to JSII runtime`);
+      //   content.push(`        todo!("Operation::toString not implemented")`);
+      //   content.push(`    }`);
+      //   content.push(`}`);
+      //   implementedTraits.add('Operation');
 
-    //   // Operation extends NumericValue, so implement that too
-    //   if (!implementedTraits.has('NumericValue')) {
-    //     content.push(`impl NumericValue for ${className}Impl {`);
-    //     content.push(`    fn get_value(&self) -> f64 {`);
-    //     content.push(`        // Delegate to JSII runtime`);
-    //     content.push(
-    //       `        todo!("NumericValue::get_value not implemented")`,
-    //     );
-    //     content.push(`    }`);
-    //     content.push(`}`);
-    //     implementedTraits.add('NumericValue');
-    //   }
+      //   // Operation extends NumericValue, so implement that too
+      //   if (!implementedTraits.has('NumericValue')) {
+      //     content.push(`impl NumericValue for ${className}Impl {`);
+      //     content.push(`    fn get_value(&self) -> f64 {`);
+      //     content.push(`        // Delegate to JSII runtime`);
+      //     content.push(
+      //       `        todo!("NumericValue::get_value not implemented")`,
+      //     );
+      //     content.push(`    }`);
+      //     content.push(`}`);
+      //     implementedTraits.add('NumericValue');
+      //   }
 
       // NumericValue extends Base, so implement that too
       if (!implementedTraits.has('Base')) {
         // content.push(use)
-        content.push(`impl ascopeajsiiacalcabase::Base::Base::Base for ${className}Impl {`);
+        content.push(
+          `impl ascopeajsiiacalcabase::Base::Base::Base for ${className}Impl {`,
+        );
         content.push(`    fn typeName(&self) -> Box<dyn std::any::Any> {`);
         content.push(`        // Delegate to JSII runtime`);
         content.push(`        todo!("Base::typeName not implemented")`);
@@ -1311,7 +1316,7 @@ class RustGenerator extends Generator {
     // Generate mod.rs with only module declarations and re-exports
     this.collectModFileContent(modFilePath, [
       `pub mod ${enm.name};`,
-      `pub use ${enm.name}::*;`
+      `pub use ${enm.name}::*;`,
     ]);
 
     // Generate actual implementation in {TypeName}.rs
@@ -1474,20 +1479,20 @@ class RustGenerator extends Generator {
 
       // 🚀 ALL classes implement Operation trait, so add Operation import automatically
       // Only skip for the Operation trait class itself and its direct subtraits
-      const skipOperation = [
+      const _skipOperation = [
         'Operation',
         'BinaryOperation',
         'UnaryOperation',
         'CompositeOperation',
       ].includes(className);
 
-      // if (!skipOperation) {
-        // rawImports.add('use crate::Operation::Operation;');
+      // if (!_skipOperation) {
+      // rawImports.add('use crate::Operation::Operation;');
 
-        // Only add NumericValue import if this isn't the NumericValue class itself
-        // if (className !== 'NumericValue') {
-        //   rawImports.add('use ascopeajsiiacalcalib::NumericValue::NumericValue;');
-        // }
+      // Only add NumericValue import if this isn't the NumericValue class itself
+      // if (className !== 'NumericValue') {
+      //   rawImports.add('use ascopeajsiiacalcalib::NumericValue::NumericValue;');
+      // }
       // }
 
       // Add IBaseInterface import for classes that implement it
@@ -1695,7 +1700,7 @@ class RustGenerator extends Generator {
       if (namespace) {
         // External namespaced type with alias - now internal to same crate
         const namespacePath = namespace.replace(/\./g, '::');
-        let crateName = parts[0].replace(/[^a-zA-Z0-9_]/g, 'a');
+        const crateName = parts[0].replace(/[^a-zA-Z0-9_]/g, 'a');
 
         if (typeName !== alias) {
           return `use ${crateName}::${namespacePath}::${typeName}::${typeName} as ${alias};`;
@@ -1798,8 +1803,7 @@ class RustGenerator extends Generator {
       const typeName = parts[parts.length - 1];
       const namespace = parts.slice(1, -1).join('.');
 
-
-      let crateName = parts[0].replace(/[^a-zA-Z0-9_]/g, 'a');
+      const crateName = parts[0].replace(/[^a-zA-Z0-9_]/g, 'a');
       if (crateName === this.assembly.name) {
         if (namespace) {
           // External namespaced type - now internal to same crate with proper module path
@@ -1809,7 +1813,7 @@ class RustGenerator extends Generator {
         }
         // External root-level type - now internal to same crate
         return `use crate::${typeName}::${typeName}::${typeName};`;
-        // return `use ${crateName}::${typeName}::${typeName};`;  
+        // return `use ${crateName}::${typeName}::${typeName};`;
       }
 
       if (namespace) {
@@ -2421,7 +2425,7 @@ class RustGenerator extends Generator {
       '// All assembly-specific traits are generated in their proper modules',
     );
 
-    this.code.closeFile(this.currentAssembly?.name + '/src/jsii_runtime.rs');
+    this.code.closeFile(`${this.currentAssembly?.name}/src/jsii_runtime.rs`);
   }
 
   private generateModuleFiles(nestedModules: Map<string, Set<string>>): void {
@@ -2433,15 +2437,15 @@ class RustGenerator extends Generator {
 
       // Add module declarations for child modules
       const sortedChildren = Array.from(children).sort();
-      // for (const child of sortedChildren) {
-        // content.push(`pub mod ${child};`);
-      // }
+      for (const child of sortedChildren) {
+        content.push(`pub mod ${child};`);
+      }
 
       this.collectModFileContent(modFilePath, content);
     }
 
     // Generate intermediate mod.rs files for all namespace levels
-    // this.generateIntermediateModFiles();
+    this.generateIntermediateModFiles();
 
     // Also handle types that may be placed in flattened paths due to conflicts
     // We need to ensure all types are properly declared in accessible module files
@@ -2505,9 +2509,9 @@ class RustGenerator extends Generator {
       const modFilePath = `src/${modulePath}/mod.rs`;
 
       // Skip if we already have content for this mod.rs file
-      // if (this.modFileContents.has(modFilePath)) {
-      //   continue;
-      // }
+      if (this.modFileContents.has(modFilePath)) {
+        continue;
+      }
 
       // Find all immediate children of this namespace
       const children = new Set<string>();
@@ -2602,7 +2606,32 @@ class RustGenerator extends Generator {
     if (!this.modFileContents.has(path)) {
       this.modFileContents.set(path, []);
     }
-    this.modFileContents.get(path)!.push(...content);
+
+    const fileContent = this.modFileContents.get(path)!;
+
+    // For mod.rs files, use deduplication tracking
+    if (
+      path.endsWith('/mod.rs') &&
+      content.every(
+        (line) => line.startsWith('pub mod ') || line.startsWith('pub use '),
+      )
+    ) {
+      if (!this.modFileDeclarations.has(path)) {
+        this.modFileDeclarations.set(path, new Set());
+      }
+
+      const declarations = this.modFileDeclarations.get(path)!;
+
+      for (const line of content) {
+        if (!declarations.has(line)) {
+          declarations.add(line);
+          fileContent.push(line);
+        }
+      }
+    } else {
+      // For implementation files, just append all content
+      fileContent.push(...content);
+    }
   }
 
   private writeAllModFiles() {
@@ -2953,7 +2982,7 @@ class RustGenerator extends Generator {
     // Types can be accessed directly from their modules like: modulename::TypeName
     // Or imported explicitly with: use crate::modulename::TypeName;
 
-    this.code.closeFile(this.currentAssembly?.name + '/src/lib.rs');
+    this.code.closeFile(`${this.currentAssembly?.name}/src/lib.rs`);
 
     // Generate the jsii_runtime.rs file with core JSII types
     this.generateJsiiRuntime();
