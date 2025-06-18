@@ -1412,24 +1412,30 @@ class RustGenerator extends Generator {
     if (isNamedTypeReference(type)) {
       const typeName = type.fqn.split('.').pop() ?? type.fqn;
 
-      // 🚀 ALL JSII types (classes, interfaces, enums) become trait objects
-      // This is because everything in JSII goes through the runtime
+      // 🚀 JSII classes and interfaces become trait objects
+      // Enums are concrete types and should not be boxed
       if (type.fqn.startsWith('jsii-calc.')) {
-        // For enums, use the EnumTrait instead of the enum directly
         const typeInfo = this.getTypeInfo(type.fqn);
         if (typeInfo?.kind === 'enum') {
-          return `Box<dyn ${typeName}Trait>`;
+          // Enums are concrete types, not trait objects
+          return typeName;
         }
+        // Classes and interfaces are trait objects
         return `Box<dyn ${typeName}>`;
       }
 
-      // ✅ External interfaces (from other packages) should also be trait objects
+      // ✅ External types - enums are concrete, others are trait objects
       if (
         type.fqn.startsWith('@scope/jsii-calc-lib.') ||
         type.fqn.startsWith('@scope/jsii-calc-base.') ||
         type.fqn.startsWith('@scope/jsii-calc-base-of-base.')
       ) {
-        // All external JSII types become trait objects
+        const typeInfo = this.getTypeInfo(type.fqn);
+        if (typeInfo?.kind === 'enum') {
+          // External enums are also concrete types
+          return typeName;
+        }
+        // External classes and interfaces are trait objects
         return `Box<dyn ${typeName}>`;
       }
 
@@ -1499,6 +1505,14 @@ class RustGenerator extends Generator {
       // }
       // }
 
+      // Add NumericValue import for classes that use it
+      const needsNumericValue = ['Add', 'Multiply', 'Negate'];
+      if (needsNumericValue.includes(className)) {
+        rawImports.add(
+          'use ascopeajsiiacalcalib::NumericValue::NumericValue::NumericValue;',
+        );
+      }
+
       // Add IBaseInterface import for classes that implement it
       const needsIBaseInterface = ['Class3', 'Baz'];
       if (needsIBaseInterface.includes(className)) {
@@ -1507,37 +1521,38 @@ class RustGenerator extends Generator {
         );
       }
 
-      // Add imports for module2702 classes
+      // Add imports for module2702 classes - go one level deeper
       if (namespace === 'module2702') {
         if (className === 'Resource') {
           rawImports.add(
-            'use crate::module2702::IConstruct::{IConstruct, IConstructRef};',
+            'use crate::module2702::IConstruct::{IConstruct::IConstruct, IConstructRef};',
           );
         } else if (className === 'Vpc') {
           rawImports.add(
-            'use crate::module2702::IConstruct::{IConstruct, IConstructRef};',
+            'use crate::module2702::IConstruct::{IConstruct::IConstruct, IConstructRef};',
           );
           rawImports.add(
-            'use crate::module2702::IResource::{IResource, IResourceRef};',
+            'use crate::module2702::IResource::{IResource::IResource, IResourceRef};',
           );
-          rawImports.add('use crate::module2702::Construct::Construct;');
+          rawImports.add(
+            'use crate::module2702::Construct::Construct::Construct;',
+          );
         }
       }
 
       // Add import for ImplementsInterfaceWithInternalSubclass
       if (className === 'ImplementsInterfaceWithInternalSubclass') {
         rawImports.add(
-          'use crate::IInterfaceWithInternal::{IInterfaceWithInternal, IInterfaceWithInternalRef};',
+          'use crate::IInterfaceWithInternal::{IInterfaceWithInternal::IInterfaceWithInternal, IInterfaceWithInternalRef};',
         );
       }
 
       // Add CompositionStringStyleTrait import for classes that implement CompositeOperation
-      // or other traits that use CompositionStringStyleTrait
       const needsCompositionStringStyleTrait = ['Calculator', 'Power', 'Sum'];
       if (needsCompositionStringStyleTrait.includes(className)) {
-        // rawImports.add(
-        //   'use crate::composition::CompositionStringStyle::CompositionStringStyleTrait;',
-        // );
+        rawImports.add(
+          'use crate::composition::CompositeOperation::CompositionStringStyle::CompositionStringStyleTrait;',
+        );
       }
     }
 
