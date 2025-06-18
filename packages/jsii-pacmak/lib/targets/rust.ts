@@ -1282,9 +1282,30 @@ class RustGenerator extends Generator {
 
     let implFilename;
     let modFilename;
+    let isNestedInType = false;
     const fullPath = enm.namespace ? `${enm.namespace}.${enm.name}` : enm.name;
 
-    if (enm.namespace) {
+    // Check if this enum is nested inside another type (like CompositeOperation.CompositionStringStyle)
+    if (enm.namespace && this.currentAssembly?.types) {
+      const parentTypeFqn = `${enm.assembly}.${enm.namespace}`;
+      isNestedInType = parentTypeFqn in this.currentAssembly.types;
+    }
+
+    if (isNestedInType && enm.namespace) {
+      // For nested enums inside classes, place them directly in the parent class's directory
+      const namespacePath = this.getConflictFreeNamespacePath(
+        enm.namespace,
+        enm.name,
+      );
+      implFilename = `${namespacePath}/${enm.name}`;
+
+      // Update the parent class's mod.rs to declare this enum
+      const parentModPath = `src/${namespacePath}/mod.rs`;
+      this.collectModFileContent(parentModPath, [
+        `pub mod ${enm.name};`,
+        `pub use ${enm.name}::*;`,
+      ]);
+    } else if (enm.namespace) {
       // Handle namespace conflicts by flattening when necessary
       const namespacePath = this.getConflictFreeNamespacePath(
         enm.namespace,
@@ -1298,8 +1319,8 @@ class RustGenerator extends Generator {
       modFilename = `${enm.name}/mod`;
     }
 
-    // Handle conflicts at any namespace level
-    if (conflicts.has(fullPath)) {
+    // Handle conflicts at any namespace level (only for non-nested types)
+    if (!isNestedInType && conflicts.has(fullPath)) {
       // This type conflicts with a namespace - put it in its own subdirectory
       if (enm.namespace) {
         const namespacePath = this.getConflictFreeNamespacePath(
@@ -1315,13 +1336,15 @@ class RustGenerator extends Generator {
     }
 
     const implFilePath = `src/${implFilename}.rs`;
-    const modFilePath = `src/${modFilename}.rs`;
 
-    // Generate mod.rs with only module declarations and re-exports
-    this.collectModFileContent(modFilePath, [
-      `pub mod ${enm.name};`,
-      `pub use ${enm.name}::*;`,
-    ]);
+    // Generate mod.rs with only module declarations and re-exports (only for non-nested types)
+    if (!isNestedInType && modFilename) {
+      const modFilePath = `src/${modFilename}.rs`;
+      this.collectModFileContent(modFilePath, [
+        `pub mod ${enm.name};`,
+        `pub use ${enm.name}::*;`,
+      ]);
+    }
 
     // Generate actual implementation in {TypeName}.rs
     const content: string[] = [];
@@ -1730,7 +1753,34 @@ class RustGenerator extends Generator {
           }
           return `use crate::${namespacePath}::${typeName}::${typeName}::${typeName};`;
         } else if (typeInfo?.kind === 'enum') {
-          // 🚀 Enums: import only the enum with alias using full path to avoid module conflicts
+          // 🚀 Enums: Check if this is a nested enum inside another type
+          const parts = fqn.split('.');
+          const parentFqn = parts.slice(0, -1).join('.');
+          const isNestedEnum =
+            this.currentAssembly?.types &&
+            parentFqn in this.currentAssembly.types;
+
+          if (isNestedEnum) {
+            // For nested enums, import directly from parent type's directory
+            // The parent class module should already have pub mod declarations
+            const parentTypeName = parts[parts.length - 2];
+            const parentNamespacePath = this.getConflictFreeNamespacePath(
+              parts.slice(1, -2).join('.'),
+              parentTypeName,
+            ).replace(/\//g, '::');
+
+            if (parentNamespacePath) {
+              if (typeName !== alias) {
+                return `use crate::${parentNamespacePath}::${parentTypeName}::${typeName} as ${alias};`;
+              }
+              return `use crate::${parentNamespacePath}::${parentTypeName}::${typeName};`;
+            }
+            if (typeName !== alias) {
+              return `use crate::${parentTypeName}::${typeName} as ${alias};`;
+            }
+            return `use crate::${parentTypeName}::${typeName};`;
+          }
+          // For regular enums, use the full path
           if (typeName !== alias) {
             return `use crate::${namespacePath}::${typeName}::${typeName}::${typeName} as ${alias};`;
           }
@@ -1756,7 +1806,23 @@ class RustGenerator extends Generator {
         }
         return `use crate::${typeName}::${typeName}::${typeName};`;
       } else if (typeInfo?.kind === 'enum') {
-        // 🚀 Enums: import only the enum with alias using full path to avoid module conflicts
+        // 🚀 Enums: Check if this is a nested enum inside another type
+        const parts = fqn.split('.');
+        const parentFqn = parts.slice(0, -1).join('.');
+        const isNestedEnum =
+          this.currentAssembly?.types &&
+          parentFqn in this.currentAssembly.types;
+
+        if (isNestedEnum) {
+          // For nested enums, import directly from parent type's directory
+          // The parent class module should already have pub mod declarations
+          const parentTypeName = parts[parts.length - 2];
+          if (typeName !== alias) {
+            return `use crate::${parentTypeName}::${typeName} as ${alias};`;
+          }
+          return `use crate::${parentTypeName}::${typeName};`;
+        }
+        // For regular enums, use the full path
         if (typeName !== alias) {
           return `use crate::${typeName}::${typeName}::${typeName} as ${alias};`;
         }
@@ -1832,8 +1898,27 @@ class RustGenerator extends Generator {
           // 🚀 Classes: just import the trait (no more Abstract/Base distinction)
           return `use crate::${namespacePath}::${typeName}::${typeName}::${typeName};`;
         } else if (typeInfo?.kind === 'enum') {
-          // 🚀 Enums: import only the enum using full path to avoid module conflicts
+          // 🚀 Enums: Check if this is a nested enum inside another type
+          const parts = fqn.split('.');
+          const parentFqn = parts.slice(0, -1).join('.');
+          const isNestedEnum =
+            this.currentAssembly?.types &&
+            parentFqn in this.currentAssembly.types;
 
+          if (isNestedEnum) {
+            // For nested enums, import directly from parent type's directory
+            const parentTypeName = parts[parts.length - 2];
+            const parentNamespacePath = this.getConflictFreeNamespacePath(
+              parts.slice(1, -2).join('.'),
+              parentTypeName,
+            ).replace(/\//g, '::');
+
+            if (parentNamespacePath) {
+              return `use crate::${parentNamespacePath}::${parentTypeName}::${typeName};`;
+            }
+            return `use crate::${parentTypeName}::${typeName};`;
+          }
+          // For regular enums, use the full path
           return `use crate::${namespacePath}::${typeName}::${typeName}::${typeName};`;
         }
         // Fallback for unknown types
@@ -1848,7 +1933,19 @@ class RustGenerator extends Generator {
         // 🚀 Classes: just import the trait
         return `use crate::${typeName}::${typeName}::${typeName};`;
       } else if (typeInfo?.kind === 'enum') {
-        // 🚀 Enums: import only the enum using full path to avoid module conflicts
+        // 🚀 Enums: Check if this is a nested enum inside another type
+        const parts = fqn.split('.');
+        const parentFqn = parts.slice(0, -1).join('.');
+        const isNestedEnum =
+          this.currentAssembly?.types &&
+          parentFqn in this.currentAssembly.types;
+
+        if (isNestedEnum) {
+          // For nested enums, import directly from parent type's directory
+          const parentTypeName = parts[parts.length - 2];
+          return `use crate::${parentTypeName}::${typeName};`;
+        }
+        // For regular enums, use the full path
         return `use crate::${typeName}::${typeName}::${typeName};`;
       }
       // Fallback - just import the type from its module
