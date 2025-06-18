@@ -1690,8 +1690,7 @@ class RustGenerator extends Generator {
     _currentType: InterfaceType | ClassType,
     alias: string,
   ): string | null {
-    // Handle external dependencies - since all assemblies are generated into the same crate,
-    // treat them as internal types
+    // Handle external dependencies
     if (
       fqn.startsWith('@scope/jsii-calc-lib.') ||
       fqn.startsWith('@scope/jsii-calc-base.') ||
@@ -1700,22 +1699,35 @@ class RustGenerator extends Generator {
       const parts = fqn.split('.');
       const typeName = parts[parts.length - 1];
       const namespace = parts.slice(1, -1).join('.');
+      const crateName = parts[0].replace(/[^a-zA-Z0-9_]/g, 'a');
 
-      if (namespace) {
-        // External namespaced type with alias - now internal to same crate
-        const namespacePath = namespace.replace(/\./g, '::');
-        const crateName = parts[0].replace(/[^a-zA-Z0-9_]/g, 'a');
-
+      // Check if this is a self-import within the external crate
+      if (crateName === this.currentAssembly?.name) {
+        // Importing from same assembly - use crate:: prefix
+        if (namespace) {
+          const namespacePath = namespace.replace(/\./g, '::');
+          if (typeName !== alias) {
+            return `use crate::${namespacePath}::${typeName}::${typeName}::${typeName} as ${alias};`;
+          }
+          return `use crate::${namespacePath}::${typeName}::${typeName}::${typeName};`;
+        }
         if (typeName !== alias) {
-          return `use ${crateName}::${namespacePath}::${typeName}::${typeName} as ${alias};`;
+          return `use crate::${typeName}::${typeName}::${typeName} as ${alias};`;
+        }
+        return `use crate::${typeName}::${typeName}::${typeName};`;
+      }
+      // Importing from different assembly - use external crate name
+      if (namespace) {
+        const namespacePath = namespace.replace(/\./g, '::');
+        if (typeName !== alias) {
+          return `use ${crateName}::${namespacePath}::${typeName}::${typeName}::${typeName} as ${alias};`;
         }
         return `use ${crateName}::${namespacePath}::${typeName}::${typeName}::${typeName};`;
       }
-      // External root-level type with alias - now internal to same crate
       if (typeName !== alias) {
-        return `use crate::${typeName}::${typeName}::${typeName} as ${alias};`;
+        return `use ${crateName}::${typeName}::${typeName}::${typeName} as ${alias};`;
       }
-      return `use crate::${typeName}::${typeName}::${typeName};`;
+      return `use ${crateName}::${typeName}::${typeName}::${typeName};`;
     }
 
     // Handle internal types - simplified path structure
@@ -1796,8 +1808,7 @@ class RustGenerator extends Generator {
       return null;
     }
 
-    // Handle external dependencies (from other packages) - since all assemblies are generated
-    // into the same crate, treat them as internal types
+    // Handle external dependencies (from other packages)
     if (
       fqn.startsWith('@scope/jsii-calc-lib.') ||
       fqn.startsWith('@scope/jsii-calc-base.') ||
@@ -1808,26 +1819,21 @@ class RustGenerator extends Generator {
       const namespace = parts.slice(1, -1).join('.');
 
       const crateName = parts[0].replace(/[^a-zA-Z0-9_]/g, 'a');
-      if (crateName === this.assembly.name) {
+
+      // Check if this is a self-import within the external crate
+      if (crateName === this.currentAssembly?.name) {
+        // Importing from same assembly - use crate:: prefix
         if (namespace) {
-          // External namespaced type - now internal to same crate with proper module path
           const namespacePath = namespace.replace(/\./g, '::');
-          // return `use ${crateName}::${namespacePath}::${typeName}::${typeName};`;
           return `use crate::${namespacePath}::${typeName}::${typeName}::${typeName};`;
         }
-        // External root-level type - now internal to same crate
         return `use crate::${typeName}::${typeName}::${typeName};`;
-        // return `use ${crateName}::${typeName}::${typeName};`;
       }
-
+      // Importing from different assembly - use external crate name
       if (namespace) {
-        // External namespaced type - now internal to same crate with proper module path
         const namespacePath = namespace.replace(/\./g, '::');
-        return `use ${crateName}::${namespacePath}::${typeName}::${typeName};`;
-        // return `use crate::${namespacePath}::${typeName}::${typeName};`;
+        return `use ${crateName}::${namespacePath}::${typeName}::${typeName}::${typeName};`;
       }
-      // External root-level type - now internal to same crate
-      // return `use crate::${typeName}::${typeName};`;
       return `use ${crateName}::${typeName}::${typeName}::${typeName};`;
     }
 
