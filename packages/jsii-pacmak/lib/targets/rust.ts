@@ -1730,11 +1730,11 @@ class RustGenerator extends Generator {
           }
           return `use crate::${namespacePath}::${typeName}::${typeName}::${typeName};`;
         } else if (typeInfo?.kind === 'enum') {
-          // 🚀 Enums: import only the enum with alias
+          // 🚀 Enums: import only the enum with alias using full path to avoid module conflicts
           if (typeName !== alias) {
-            return `use crate::${namespacePath}::${typeName}::${typeName} as ${alias};`;
+            return `use crate::${namespacePath}::${typeName}::${typeName}::${typeName} as ${alias};`;
           }
-          return `use crate::${namespacePath}::${typeName}::${typeName};`;
+          return `use crate::${namespacePath}::${typeName}::${typeName}::${typeName};`;
         }
         // Fallback for unknown types
         if (typeName !== alias) {
@@ -1756,11 +1756,11 @@ class RustGenerator extends Generator {
         }
         return `use crate::${typeName}::${typeName}::${typeName};`;
       } else if (typeInfo?.kind === 'enum') {
-        // 🚀 Enums: import only the enum with alias
+        // 🚀 Enums: import only the enum with alias using full path to avoid module conflicts
         if (typeName !== alias) {
-          return `use crate::${typeName}::${typeName} as ${alias};`;
+          return `use crate::${typeName}::${typeName}::${typeName} as ${alias};`;
         }
-        return `use crate::${typeName}::${typeName};`;
+        return `use crate::${typeName}::${typeName}::${typeName};`;
       }
       // Fallback - just import the type from its module
       if (typeName !== alias) {
@@ -1832,13 +1832,13 @@ class RustGenerator extends Generator {
           // 🚀 Classes: just import the trait (no more Abstract/Base distinction)
           return `use crate::${namespacePath}::${typeName}::${typeName}::${typeName};`;
         } else if (typeInfo?.kind === 'enum') {
-          // 🚀 Enums: import only the enum
+          // 🚀 Enums: import only the enum using full path to avoid module conflicts
 
-          return `use crate::${namespacePath}::${typeName}::${typeName};`;
+          return `use crate::${namespacePath}::${typeName}::${typeName}::${typeName};`;
         }
         // Fallback for unknown types
 
-        return `use crate::${namespacePath}::${typeName}::${typeName}::${typeName};`;
+        return `use crate::${namespacePath}::${typeName}::${typeName};`;
       }
 
       // Root level types use simplified structure: TypeName
@@ -1848,11 +1848,11 @@ class RustGenerator extends Generator {
         // 🚀 Classes: just import the trait
         return `use crate::${typeName}::${typeName}::${typeName};`;
       } else if (typeInfo?.kind === 'enum') {
-        // 🚀 Enums: import only the enum
-        return `use crate::${typeName}::${typeName};`;
+        // 🚀 Enums: import only the enum using full path to avoid module conflicts
+        return `use crate::${typeName}::${typeName}::${typeName};`;
       }
       // Fallback - just import the type from its module
-      return `use crate::${typeName}::${typeName}::${typeName};`;
+      return `use crate::${typeName}::${typeName};`;
     }
 
     return null;
