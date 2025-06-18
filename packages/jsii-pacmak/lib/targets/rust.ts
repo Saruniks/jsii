@@ -2901,26 +2901,11 @@ class RustGenerator extends Generator {
     const nestedModules = new Map<string, Set<string>>();
 
     // First, add types from the current assembly ONLY
-    console.log(
-      `DEBUG: Processing types. assm.name = '${assm.name}', originalName = '${(this.currentAssembly as any)?.originalName}'`,
-    );
-    let processedCount = 0;
-    let skippedCount = 0;
-
     for (const [_fqn, type] of Object.entries(assm.types ?? {})) {
       // Skip external types - only process types that belong to the current assembly
       if (type.assembly !== (this.currentAssembly as any)?.originalName) {
-        console.log(
-          `DEBUG: Skipping external type ${type.name} from assembly '${type.assembly}'`,
-        );
-        skippedCount++;
         continue;
       }
-
-      console.log(
-        `DEBUG: Processing local type ${type.name} from assembly '${type.assembly}'`,
-      );
-      processedCount++;
 
       if (
         type.kind === TypeKind.Interface ||
@@ -2962,13 +2947,7 @@ class RustGenerator extends Generator {
     }
 
     // Generate module declarations for root level
-    console.log(
-      `DEBUG: Processed ${processedCount} local types, skipped ${skippedCount} external types`,
-    );
-    console.log(`DEBUG: Found ${modules.size} modules:`, Array.from(modules));
-
     for (const module of Array.from(modules).sort()) {
-      console.log(`DEBUG: Adding pub mod ${module};`);
       this.code.line(`pub mod ${module};`);
     }
 
