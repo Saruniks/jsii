@@ -769,13 +769,16 @@ class RustGenerator extends Generator {
     content.push(`// Implement base stub traits`);
 
     // Only implement Operation if it's not a BinaryOperation, UnaryOperation, or CompositeOperation class
-    // const skipOperation = [
-    //   'Operation',
-    //   'BinaryOperation',
-    //   'UnaryOperation',
-    //   'CompositeOperation',
-    // ].includes(className);
-    // if (!skipOperation) {
+    const skipOperation = [
+      // 'Operation',
+      'BinaryOperation',
+      'UnaryOperation',
+      'CompositeOperation',
+      'StaticConsumer',
+      'Very',
+      'Base',
+    ].includes(className);
+    if (!skipOperation) {
     //   content.push(`impl Operation for ${className}Impl {`);
     //   content.push(`    fn toString(&self) -> String {`);
     //   content.push(`        // Delegate to JSII runtime`);
@@ -797,17 +800,18 @@ class RustGenerator extends Generator {
     //     implementedTraits.add('NumericValue');
     //   }
 
-    //   // NumericValue extends Base, so implement that too
-    //   if (!implementedTraits.has('Base')) {
-    //     content.push(`impl Base for ${className}Impl {`);
-    //     // content.push(`    fn typeName(&self) -> Box<dyn std::any::Any> {`);
-    //     // content.push(`        // Delegate to JSII runtime`);
-    //     // content.push(`        todo!("Base::typeName not implemented")`);
-    //     // content.push(`    }`);
-    //     content.push(`}`);
-    //     implementedTraits.add('Base');
-    //   }
-    // }
+      // NumericValue extends Base, so implement that too
+      if (!implementedTraits.has('Base')) {
+        // content.push(use)
+        content.push(`impl ascopeajsiiacalcabase::Base::Base for ${className}Impl {`);
+        content.push(`    fn typeName(&self) -> Box<dyn std::any::Any> {`);
+        content.push(`        // Delegate to JSII runtime`);
+        content.push(`        todo!("Base::typeName not implemented")`);
+        content.push(`    }`);
+        content.push(`}`);
+        implementedTraits.add('Base');
+      }
+    }
 
     // IFriendly implementation is now handled by proper interface resolution
     // Only classes that explicitly implement IFriendly or interfaces extending it will get the implementation
@@ -1652,10 +1656,12 @@ class RustGenerator extends Generator {
       if (namespace) {
         // External namespaced type with alias - now internal to same crate
         const namespacePath = namespace.replace(/\./g, '::');
+        let crateName = parts[0].replace(/[^a-zA-Z0-9_]/g, 'a');
+
         if (typeName !== alias) {
-          return `use crate::${namespacePath}::${typeName}::${typeName} as ${alias};`;
+          return `use ${crateName}::${namespacePath}::${typeName}::${typeName} as ${alias};`;
         }
-        return `use crate::${namespacePath}::${typeName}::${typeName};`;
+        return `use ${crateName}::${namespacePath}::${typeName}::${typeName};`;
       }
       // External root-level type with alias - now internal to same crate
       if (typeName !== alias) {
@@ -1753,13 +1759,29 @@ class RustGenerator extends Generator {
       const typeName = parts[parts.length - 1];
       const namespace = parts.slice(1, -1).join('.');
 
+
+      let crateName = parts[0].replace(/[^a-zA-Z0-9_]/g, 'a');
+      if (crateName === this.assembly.name) {
+        if (namespace) {
+          // External namespaced type - now internal to same crate with proper module path
+          const namespacePath = namespace.replace(/\./g, '::');
+          // return `use ${crateName}::${namespacePath}::${typeName}::${typeName};`;
+          return `use crate::${namespacePath}::${typeName}::${typeName};`;
+        }
+        // External root-level type - now internal to same crate
+        return `use crate::${typeName}::${typeName};`;
+        // return `use ${crateName}::${typeName}::${typeName};`;  
+      }
+
       if (namespace) {
         // External namespaced type - now internal to same crate with proper module path
         const namespacePath = namespace.replace(/\./g, '::');
-        return `use ${parts[0]}::${namespacePath}::${typeName}::${typeName};`;
+        return `use ${crateName}::${namespacePath}::${typeName}::${typeName};`;
+        return `use crate::${namespacePath}::${typeName}::${typeName};`;
       }
       // External root-level type - now internal to same crate
-      return `use ${parts[0]}::${typeName}::${typeName};`;
+      // return `use crate::${typeName}::${typeName};`;
+      return `use ${crateName}::${typeName}::${typeName};`;
     }
 
     // Handle internal types - simplified path structure
