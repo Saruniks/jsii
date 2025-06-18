@@ -1546,14 +1546,6 @@ class RustGenerator extends Generator {
           'use crate::IInterfaceWithInternal::{IInterfaceWithInternal::IInterfaceWithInternal, IInterfaceWithInternalRef};',
         );
       }
-
-      // Add CompositionStringStyleTrait import for classes that implement CompositeOperation
-      const needsCompositionStringStyleTrait = ['Calculator', 'Power', 'Sum'];
-      if (needsCompositionStringStyleTrait.includes(className)) {
-        rawImports.add(
-          'use crate::composition::CompositeOperation::CompositionStringStyle::CompositionStringStyleTrait;',
-        );
-      }
     }
 
     // Collect all FQNs that need importing
@@ -1605,12 +1597,7 @@ class RustGenerator extends Generator {
     if (isNamedTypeReference(typeRef)) {
       fqns.add(typeRef.fqn);
 
-      // 🚀 For enums, also add the trait version to imports
-      const typeInfo = this.getTypeInfo(typeRef.fqn);
-      if (typeInfo?.kind === 'enum') {
-        // Add a special marker so we know to import the trait
-        fqns.add(`${typeRef.fqn}::TRAIT`);
-      }
+      // Note: We only import the enum itself, not the trait
     } else if (isCollectionTypeReference(typeRef)) {
       this.collectFqnsFromTypeReference(typeRef.collection.elementtype, fqns);
     } else if (isUnionTypeReference(typeRef)) {
@@ -1628,17 +1615,10 @@ class RustGenerator extends Generator {
 
     // Group FQNs by their type name to detect conflicts
     const typeNameGroups = new Map<string, string[]>();
-    const enumTraitMarkers = new Set<string>();
 
     for (const fqn of fqns) {
       // Skip self-imports
       if (fqn === currentType.fqn) continue;
-
-      // 🚀 Handle enum trait markers - collect them but don't process yet
-      if (fqn.endsWith('::TRAIT')) {
-        enumTraitMarkers.add(fqn.replace('::TRAIT', ''));
-        continue;
-      }
 
       const typeName = fqn.split('.').pop();
       if (!typeName) continue;
@@ -1656,11 +1636,6 @@ class RustGenerator extends Generator {
         const fqn = fqnGroup[0];
         const importStmt = this.getImportForFqn(fqn, currentType);
         if (importStmt) {
-          // 🚀 If this enum has a trait marker, the import already includes the trait
-          if (enumTraitMarkers.has(fqn)) {
-            // Remove the trait marker to avoid duplicate processing
-            enumTraitMarkers.delete(fqn);
-          }
           imports.push(importStmt);
         }
       } else {
@@ -1674,27 +1649,8 @@ class RustGenerator extends Generator {
             alias,
           );
           if (importStmt) {
-            if (enumTraitMarkers.has(fqn)) {
-              enumTraitMarkers.delete(fqn);
-            }
             imports.push(importStmt);
           }
-        }
-      }
-    }
-
-    // 🚀 Process remaining enum trait markers (those that weren't part of regular imports)
-    for (const enumFqn of enumTraitMarkers) {
-      const typeName = enumFqn.split('.').pop();
-      if (typeName) {
-        // Generate trait-only import for enums that weren't already imported
-        const importStmt = this.getImportForFqn(enumFqn, currentType);
-        if (importStmt) {
-          const traitOnlyImport = importStmt.replace(
-            `{${typeName}, ${typeName}Trait}`,
-            `${typeName}Trait`,
-          );
-          imports.push(traitOnlyImport);
         }
       }
     }
@@ -1774,11 +1730,11 @@ class RustGenerator extends Generator {
           }
           return `use crate::${namespacePath}::${typeName}::${typeName}::${typeName};`;
         } else if (typeInfo?.kind === 'enum') {
-          // 🚀 Enums: import both enum and trait with aliases
+          // 🚀 Enums: import only the enum with alias
           if (typeName !== alias) {
-            return `use crate::${namespacePath}::${typeName}::{${typeName}::${typeName} as ${alias}, ${typeName}Trait as ${alias}Trait};`;
+            return `use crate::${namespacePath}::${typeName}::${typeName} as ${alias};`;
           }
-          return `use crate::${namespacePath}::${typeName}::{${typeName}::${typeName}, ${typeName}Trait};`;
+          return `use crate::${namespacePath}::${typeName}::${typeName};`;
         }
         // Fallback for unknown types
         if (typeName !== alias) {
@@ -1800,11 +1756,11 @@ class RustGenerator extends Generator {
         }
         return `use crate::${typeName}::${typeName}::${typeName};`;
       } else if (typeInfo?.kind === 'enum') {
-        // 🚀 Enums: import both enum and trait with aliases
+        // 🚀 Enums: import only the enum with alias
         if (typeName !== alias) {
-          return `use crate::${typeName}::{${typeName}::${typeName} as ${alias}, ${typeName}Trait as ${alias}Trait};`;
+          return `use crate::${typeName}::${typeName} as ${alias};`;
         }
-        return `use crate::${typeName}::{${typeName}::${typeName}, ${typeName}Trait};`;
+        return `use crate::${typeName}::${typeName};`;
       }
       // Fallback - just import the type from its module
       if (typeName !== alias) {
@@ -1876,10 +1832,12 @@ class RustGenerator extends Generator {
           // 🚀 Classes: just import the trait (no more Abstract/Base distinction)
           return `use crate::${namespacePath}::${typeName}::${typeName}::${typeName};`;
         } else if (typeInfo?.kind === 'enum') {
-          // 🚀 Enums: import both the enum and its trait
-          return `use crate::${namespacePath}::${typeName}::{${typeName}::${typeName}, ${typeName}Trait};`;
+          // 🚀 Enums: import only the enum
+
+          return `use crate::${namespacePath}::${typeName}::${typeName};`;
         }
         // Fallback for unknown types
+
         return `use crate::${namespacePath}::${typeName}::${typeName}::${typeName};`;
       }
 
@@ -1890,8 +1848,8 @@ class RustGenerator extends Generator {
         // 🚀 Classes: just import the trait
         return `use crate::${typeName}::${typeName}::${typeName};`;
       } else if (typeInfo?.kind === 'enum') {
-        // 🚀 Enums: import both the enum and its trait
-        return `use crate::${typeName}::{${typeName}::${typeName}, ${typeName}Trait};`;
+        // 🚀 Enums: import only the enum
+        return `use crate::${typeName}::${typeName};`;
       }
       // Fallback - just import the type from its module
       return `use crate::${typeName}::${typeName}::${typeName};`;
