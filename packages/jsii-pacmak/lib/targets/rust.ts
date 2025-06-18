@@ -51,8 +51,12 @@ class RustGenerator extends Generator {
   protected onBeginAssembly(assm: Assembly, _fingerprint: boolean): void {
     // Store assembly reference
 
+    // Store the original assembly name before sanitization for filtering
+    const originalAssemblyName = assm.name;
     assm.name = assm.name.replace(/[^a-zA-Z0-9_]/g, 'a');
     this.currentAssembly = assm;
+    // Store the original name for filtering comparisons
+    (this.currentAssembly as any).originalName = originalAssemblyName;
 
     console.log('onBeginAssembly');
 
@@ -2449,7 +2453,14 @@ class RustGenerator extends Generator {
 
     // Also handle types that may be placed in flattened paths due to conflicts
     // We need to ensure all types are properly declared in accessible module files
-    for (const type of Object.values(this.currentAssembly?.types ?? {})) {
+    for (const [_fqn, type] of Object.entries(
+      this.currentAssembly?.types ?? {},
+    )) {
+      // Skip external types - only process types that belong to the current assembly
+      if (type.assembly !== (this.currentAssembly as any)?.originalName) {
+        continue;
+      }
+
       if (
         type.kind === TypeKind.Interface ||
         type.kind === TypeKind.Class ||
@@ -2488,7 +2499,12 @@ class RustGenerator extends Generator {
     // Collect all namespace paths that need intermediate mod.rs files
     const namespacePaths = new Set<string>();
 
-    for (const type of Object.values(this.currentAssembly.types)) {
+    for (const [_fqn, type] of Object.entries(this.currentAssembly.types)) {
+      // Skip external types - only process types that belong to the current assembly
+      if (type.assembly !== (this.currentAssembly as any)?.originalName) {
+        continue;
+      }
+
       if (type.namespace) {
         const namespaceParts = type.namespace.split('.');
 
@@ -2517,7 +2533,12 @@ class RustGenerator extends Generator {
       const children = new Set<string>();
       const namespaceFromPath = modulePath.replace(/\//g, '.');
 
-      for (const type of Object.values(this.currentAssembly.types)) {
+      for (const [_fqn, type] of Object.entries(this.currentAssembly.types)) {
+        // Skip external types - only process types that belong to the current assembly
+        if (type.assembly !== (this.currentAssembly as any)?.originalName) {
+          continue;
+        }
+
         if (type.namespace) {
           // Check if this type is a direct child of the current namespace
           if (type.namespace === namespaceFromPath) {
@@ -2879,8 +2900,28 @@ class RustGenerator extends Generator {
     const modules = new Set<string>();
     const nestedModules = new Map<string, Set<string>>();
 
-    // First, add types from the current assembly
-    for (const type of Object.values(assm.types ?? {})) {
+    // First, add types from the current assembly ONLY
+    console.log(
+      `DEBUG: Processing types. assm.name = '${assm.name}', originalName = '${(this.currentAssembly as any)?.originalName}'`,
+    );
+    let processedCount = 0;
+    let skippedCount = 0;
+
+    for (const [_fqn, type] of Object.entries(assm.types ?? {})) {
+      // Skip external types - only process types that belong to the current assembly
+      if (type.assembly !== (this.currentAssembly as any)?.originalName) {
+        console.log(
+          `DEBUG: Skipping external type ${type.name} from assembly '${type.assembly}'`,
+        );
+        skippedCount++;
+        continue;
+      }
+
+      console.log(
+        `DEBUG: Processing local type ${type.name} from assembly '${type.assembly}'`,
+      );
+      processedCount++;
+
       if (
         type.kind === TypeKind.Interface ||
         type.kind === TypeKind.Class ||
@@ -2920,62 +2961,15 @@ class RustGenerator extends Generator {
       }
     }
 
-    // Also add types from external assemblies that we're treating as internal
-    // This includes types from @scope/jsii-calc-lib and @scope/jsii-calc-base
-    const externalTypeNames = new Set<string>();
-
-    // Hardcode known external types for now - we'll improve detection later
-    const knownExternalTypes = [
-      'Operation',
-      'NumericValue',
-      'Base',
-      'IFriendly',
-      'Number',
-      'MyFirstStruct',
-      'DiamondLeft',
-      'DiamondRight',
-      'StructWithOnlyOptionals',
-      'IBaseInterface',
-      'DerivedStruct',
-      'NestedStruct',
-      'VeryBaseProps',
-      // Add missing external types from compilation errors
-      'Very',
-      'IVeryBaseInterface',
-      'IDoublable',
-      'BaseProps',
-      'EnumFromScopedModule',
-      'BaseFor2647',
-    ];
-
-    for (const typeName of knownExternalTypes) {
-      externalTypeNames.add(typeName);
-    }
-
-    // Also scan the current assembly for any external type references (keep this for future improvement)
-    const fqnPattern = /(@scope\/jsii-calc-(?:lib|base|base-of-base))\.(.+)/;
-    const assemblyJson = JSON.stringify(assm);
-    const fqnMatches = assemblyJson.matchAll(
-      new RegExp(fqnPattern.source, 'g'),
-    );
-
-    for (const match of fqnMatches) {
-      const [, _assemblyName, typePath] = match;
-      const typeName = typePath.split('.').pop();
-      if (typeName && !typePath.includes('.')) {
-        // Only add root-level types (no namespace)
-        externalTypeNames.add(typeName);
-      }
-    }
-
     // Generate module declarations for root level
-    for (const module of Array.from(modules).sort()) {
-      this.code.line(`pub mod ${module};`);
-    }
+    console.log(
+      `DEBUG: Processed ${processedCount} local types, skipped ${skippedCount} external types`,
+    );
+    console.log(`DEBUG: Found ${modules.size} modules:`, Array.from(modules));
 
-    // Add the external types to our modules
-    for (const typeName of externalTypeNames) {
-      modules.add(typeName);
+    for (const module of Array.from(modules).sort()) {
+      console.log(`DEBUG: Adding pub mod ${module};`);
+      this.code.line(`pub mod ${module};`);
     }
 
     // Skip re-exports to avoid module/type name conflicts
@@ -2996,14 +2990,12 @@ class RustGenerator extends Generator {
     // Generate mod.rs files for top-level namespace modules
     // These are the modules declared in lib.rs that contain types
     for (const module of modules) {
-      // Skip non-namespace modules (these are individual types, not namespaces)
-      if (externalTypeNames.has(module)) {
-        continue; // Skip external type modules
-      }
-
       // Check if this module is a namespace by seeing if it has any types in it
-      const hasNamespaceTypes = Object.values(assm.types ?? {}).some(
-        (type) => type.namespace && type.namespace.split('.')[0] === module,
+      const hasNamespaceTypes = Object.entries(assm.types ?? {}).some(
+        ([_fqn, type]) =>
+          type.assembly === (this.currentAssembly as any)?.originalName &&
+          type.namespace &&
+          type.namespace.split('.')[0] === module,
       );
 
       if (hasNamespaceTypes) {
@@ -3013,7 +3005,12 @@ class RustGenerator extends Generator {
 
         // Find all types and subnamespaces in this top-level namespace
         const children = new Set<string>();
-        for (const type of Object.values(assm.types ?? {})) {
+        for (const [_fqn, type] of Object.entries(assm.types ?? {})) {
+          // Skip external types - only process types that belong to the current assembly
+          if (type.assembly !== (this.currentAssembly as any)?.originalName) {
+            continue;
+          }
+
           if (type.namespace && type.namespace.split('.')[0] === module) {
             const namespaceParts = type.namespace.split('.');
             if (namespaceParts.length === 1) {
