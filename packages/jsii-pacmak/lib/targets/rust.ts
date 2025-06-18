@@ -34,11 +34,11 @@ export default class Rust extends Target {
     await this.copyFiles(sourceDir, outDir);
 
     // ✅ Run cargo fmt after generation (like Go does)
-    try {
-      await shell('cargo', ['fmt'], { cwd: outDir });
-    } catch (error) {
-      console.log('Could not run cargo fmt:', error);
-    }
+    // try {
+    //   await shell('cargo', ['fmt'], { cwd: outDir });
+    // } catch (error) {
+    //   console.log('Could not run cargo fmt:', error);
+    // }
   }
 }
 
@@ -49,7 +49,10 @@ class RustGenerator extends Generator {
 
   protected onBeginAssembly(assm: Assembly, _fingerprint: boolean): void {
     // Store assembly reference
+
+    assm.name = assm.name.replace(/[^a-zA-Z0-9_]/g, 'a');
     this.currentAssembly = assm;
+
     console.log('onBeginAssembly');
 
     // Collect abstract types first
@@ -74,7 +77,7 @@ class RustGenerator extends Generator {
     // Or we need to update the jsii assembly generator to include them to .jsii file?
     // Add all the possible fields from the .jsii file to the Cargo.toml file
     // By reading the Assembly interface, get the fields that are required and also optional
-    this.code.openFile('Cargo.toml');
+    this.code.openFile(`${this.currentAssembly?.name}/Cargo.toml`);
     this.code.line('[package]');
 
     // Make things like @aws-cdk/region-info to aws-cdk-region-info
@@ -99,11 +102,12 @@ class RustGenerator extends Generator {
 
     // TODO: Add dependencies to Cargo.toml file
     // TODO: Rename the dependencies to the correct names
-    // for (const [key, value] of Object.entries(assm.dependencies ?? {})) {
-    // content.push(`${key} = "${value}"`);
-    // }
+    for (const [key, value] of Object.entries(assm.dependencies ?? {})) {
+      const assm_name = key.replace(/[^a-zA-Z0-9_]/g, 'a');
+      this.code.line(`${assm_name} = { path = "../${assm_name}", version = "${value}" }`);
+    }
 
-    this.code.closeFile('Cargo.toml');
+    this.code.closeFile(this.currentAssembly?.name + '/Cargo.toml');
 
     // Note: lib.rs generation is now handled in generateMainLibFile()
     // at the end of assembly processing to ensure all modules are included
@@ -765,45 +769,45 @@ class RustGenerator extends Generator {
     content.push(`// Implement base stub traits`);
 
     // Only implement Operation if it's not a BinaryOperation, UnaryOperation, or CompositeOperation class
-    const skipOperation = [
-      'Operation',
-      'BinaryOperation',
-      'UnaryOperation',
-      'CompositeOperation',
-    ].includes(className);
-    if (!skipOperation) {
-      content.push(`impl Operation for ${className}Impl {`);
-      content.push(`    fn toString(&self) -> String {`);
-      content.push(`        // Delegate to JSII runtime`);
-      content.push(`        todo!("Operation::toString not implemented")`);
-      content.push(`    }`);
-      content.push(`}`);
-      implementedTraits.add('Operation');
+    // const skipOperation = [
+    //   'Operation',
+    //   'BinaryOperation',
+    //   'UnaryOperation',
+    //   'CompositeOperation',
+    // ].includes(className);
+    // if (!skipOperation) {
+    //   content.push(`impl Operation for ${className}Impl {`);
+    //   content.push(`    fn toString(&self) -> String {`);
+    //   content.push(`        // Delegate to JSII runtime`);
+    //   content.push(`        todo!("Operation::toString not implemented")`);
+    //   content.push(`    }`);
+    //   content.push(`}`);
+    //   implementedTraits.add('Operation');
 
-      // Operation extends NumericValue, so implement that too
-      if (!implementedTraits.has('NumericValue')) {
-        content.push(`impl NumericValue for ${className}Impl {`);
-        content.push(`    fn get_value(&self) -> f64 {`);
-        content.push(`        // Delegate to JSII runtime`);
-        content.push(
-          `        todo!("NumericValue::get_value not implemented")`,
-        );
-        content.push(`    }`);
-        content.push(`}`);
-        implementedTraits.add('NumericValue');
-      }
+    //   // Operation extends NumericValue, so implement that too
+    //   if (!implementedTraits.has('NumericValue')) {
+    //     content.push(`impl NumericValue for ${className}Impl {`);
+    //     content.push(`    fn get_value(&self) -> f64 {`);
+    //     content.push(`        // Delegate to JSII runtime`);
+    //     content.push(
+    //       `        todo!("NumericValue::get_value not implemented")`,
+    //     );
+    //     content.push(`    }`);
+    //     content.push(`}`);
+    //     implementedTraits.add('NumericValue');
+    //   }
 
-      // NumericValue extends Base, so implement that too
-      if (!implementedTraits.has('Base')) {
-        content.push(`impl Base for ${className}Impl {`);
-        content.push(`    fn typeName(&self) -> Box<dyn std::any::Any> {`);
-        content.push(`        // Delegate to JSII runtime`);
-        content.push(`        todo!("Base::typeName not implemented")`);
-        content.push(`    }`);
-        content.push(`}`);
-        implementedTraits.add('Base');
-      }
-    }
+    //   // NumericValue extends Base, so implement that too
+    //   if (!implementedTraits.has('Base')) {
+    //     content.push(`impl Base for ${className}Impl {`);
+    //     // content.push(`    fn typeName(&self) -> Box<dyn std::any::Any> {`);
+    //     // content.push(`        // Delegate to JSII runtime`);
+    //     // content.push(`        todo!("Base::typeName not implemented")`);
+    //     // content.push(`    }`);
+    //     content.push(`}`);
+    //     implementedTraits.add('Base');
+    //   }
+    // }
 
     // IFriendly implementation is now handled by proper interface resolution
     // Only classes that explicitly implement IFriendly or interfaces extending it will get the implementation
@@ -1417,6 +1421,9 @@ class RustGenerator extends Generator {
     //   'use crate::composition::CompositionStringStyle::CompositionStringStyleTrait;',
     // );
 
+    // rawImports.add('use crate::module2700::Base::Base;');
+    // rawImports.add('use crate::DerivedClassHasNoProperties::Base::Base;');
+
     // 🚀 Add specific imports for classes that need local traits
     if ('name' in type) {
       const className = type.name;
@@ -1431,14 +1438,14 @@ class RustGenerator extends Generator {
         'CompositeOperation',
       ].includes(className);
 
-      if (!skipOperation) {
-        rawImports.add('use crate::Operation::Operation;');
+      // if (!skipOperation) {
+        // rawImports.add('use crate::Operation::Operation;');
 
         // Only add NumericValue import if this isn't the NumericValue class itself
-        if (className !== 'NumericValue') {
-          rawImports.add('use crate::NumericValue::NumericValue;');
-        }
-      }
+        // if (className !== 'NumericValue') {
+        //   rawImports.add('use ascopeajsiiacalcalib::NumericValue::NumericValue;');
+        // }
+      // }
 
       // Add IBaseInterface import for classes that implement it
       const needsIBaseInterface = ['Class3', 'Baz'];
@@ -1749,10 +1756,10 @@ class RustGenerator extends Generator {
       if (namespace) {
         // External namespaced type - now internal to same crate with proper module path
         const namespacePath = namespace.replace(/\./g, '::');
-        return `use crate::${namespacePath}::${typeName}::${typeName};`;
+        return `use ${parts[0]}::${namespacePath}::${typeName}::${typeName};`;
       }
       // External root-level type - now internal to same crate
-      return `use crate::${typeName}::${typeName};`;
+      return `use ${parts[0]}::${typeName}::${typeName};`;
     }
 
     // Handle internal types - simplified path structure
@@ -1802,7 +1809,7 @@ class RustGenerator extends Generator {
   }
 
   private generateJsiiRuntime(): void {
-    this.code.openFile('src/jsii_runtime.rs');
+    this.code.openFile(`${this.currentAssembly?.name}/src/jsii_runtime.rs`);
 
     // Generate the actual working JSII runtime implementation
     this.code.line('//! Rust runtime for jsii');
@@ -2353,7 +2360,7 @@ class RustGenerator extends Generator {
       '// All assembly-specific traits are generated in their proper modules',
     );
 
-    this.code.closeFile('src/jsii_runtime.rs');
+    this.code.closeFile(this.currentAssembly?.name + '/src/jsii_runtime.rs');
   }
 
   private generateModuleFiles(nestedModules: Map<string, Set<string>>): void {
@@ -2366,7 +2373,7 @@ class RustGenerator extends Generator {
       // Add module declarations for child modules
       const sortedChildren = Array.from(children).sort();
       // for (const child of sortedChildren) {
-        // content.push(`pub mod ${child};`);
+      // content.push(`pub mod ${child};`);
       // }
 
       this.collectModFileContent(modFilePath, content);
@@ -2377,37 +2384,37 @@ class RustGenerator extends Generator {
 
     // Also handle types that may be placed in flattened paths due to conflicts
     // We need to ensure all types are properly declared in accessible module files
-    // for (const type of Object.values(this.currentAssembly?.types ?? {})) {
-    //   if (
-    //     type.kind === TypeKind.Interface ||
-    //     type.kind === TypeKind.Class ||
-    //     type.kind === TypeKind.Enum
-    //   ) {
-    //     if (type.namespace) {
-    //       const conflictFreePath = this.getConflictFreeNamespacePath(
-    //         type.namespace,
-    //         type.name,
-    //       );
-    //       const originalPath = type.namespace.replace(/\./g, '/');
+    for (const type of Object.values(this.currentAssembly?.types ?? {})) {
+      if (
+        type.kind === TypeKind.Interface ||
+        type.kind === TypeKind.Class ||
+        type.kind === TypeKind.Enum
+      ) {
+        if (type.namespace) {
+          const conflictFreePath = this.getConflictFreeNamespacePath(
+            type.namespace,
+            type.name,
+          );
+          const originalPath = type.namespace.replace(/\./g, '/');
 
-    //       // If the conflict-free path is different from the original path,
-    //       // we need to ensure the type is declared in the accessible path
-    //       if (conflictFreePath !== originalPath) {
-    //         // Check if we need to create an additional mod.rs file
-    //         if (conflictFreePath !== '') {
-    //           const modFilePath = `src/${conflictFreePath}/mod.rs`;
-    //           // Only add if not already added by the main loop
-    //           if (!nestedModules.has(conflictFreePath.replace(/\//g, '.'))) {
-    //             const content: string[] = [];
-    //             content.push(`pub mod ${type.name};`);
+          // If the conflict-free path is different from the original path,
+          // we need to ensure the type is declared in the accessible path
+          if (conflictFreePath !== originalPath) {
+            // Check if we need to create an additional mod.rs file
+            if (conflictFreePath !== '') {
+              const modFilePath = `src/${conflictFreePath}/mod.rs`;
+              // Only add if not already added by the main loop
+              if (!nestedModules.has(conflictFreePath.replace(/\//g, '.'))) {
+                const content: string[] = [];
+                content.push(`pub mod ${type.name};`);
 
-    //             this.collectModFileContent(modFilePath, content);
-    //           }
-    //         }
-    //       }
-    //     }
-    //   }
-    // }
+                this.collectModFileContent(modFilePath, content);
+              }
+            }
+          }
+        }
+      }
+    }
   }
 
   private generateIntermediateModFiles(): void {
@@ -2537,11 +2544,11 @@ class RustGenerator extends Generator {
 
   private writeAllModFiles() {
     for (const [path, lines] of this.modFileContents) {
-      this.code.openFile(path);
+      this.code.openFile(`${this.currentAssembly?.name}/${path}`);
       for (const line of lines) {
         this.code.line(line);
       }
-      this.code.closeFile(path);
+      this.code.closeFile(`${this.currentAssembly?.name}/${path}`);
     }
   }
 
@@ -2675,7 +2682,7 @@ class RustGenerator extends Generator {
 
   private generateMainLibFile(assm: Assembly): void {
     // Generate the main lib.rs file that exports all root-level modules
-    this.code.openFile('src/lib.rs');
+    this.code.openFile(`${this.currentAssembly?.name}/src/lib.rs`);
     this.code.line(`//! JSII Rust bindings for ${assm.name}`);
     this.code.line('//! ');
     this.code.line(
@@ -2869,21 +2876,21 @@ class RustGenerator extends Generator {
       }
     }
 
-    // Add the external types to our modules
-    for (const typeName of externalTypeNames) {
-      modules.add(typeName);
-    }
-
     // Generate module declarations for root level
     for (const module of Array.from(modules).sort()) {
       this.code.line(`pub mod ${module};`);
+    }
+
+    // Add the external types to our modules
+    for (const typeName of externalTypeNames) {
+      modules.add(typeName);
     }
 
     // Skip re-exports to avoid module/type name conflicts
     // Types can be accessed directly from their modules like: modulename::TypeName
     // Or imported explicitly with: use crate::modulename::TypeName;
 
-    this.code.closeFile('src/lib.rs');
+    this.code.closeFile(this.currentAssembly?.name + '/src/lib.rs');
 
     // Generate the jsii_runtime.rs file with core JSII types
     this.generateJsiiRuntime();
