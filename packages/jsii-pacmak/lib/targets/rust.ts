@@ -2450,47 +2450,6 @@ class RustGenerator extends Generator {
 
     // Generate intermediate mod.rs files for all namespace levels
     this.generateIntermediateModFiles();
-
-    // Also handle types that may be placed in flattened paths due to conflicts
-    // We need to ensure all types are properly declared in accessible module files
-    for (const [_fqn, type] of Object.entries(
-      this.currentAssembly?.types ?? {},
-    )) {
-      // Skip external types - only process types that belong to the current assembly
-      if (type.assembly !== (this.currentAssembly as any)?.originalName) {
-        continue;
-      }
-
-      if (
-        type.kind === TypeKind.Interface ||
-        type.kind === TypeKind.Class ||
-        type.kind === TypeKind.Enum
-      ) {
-        if (type.namespace) {
-          const conflictFreePath = this.getConflictFreeNamespacePath(
-            type.namespace,
-            type.name,
-          );
-          const originalPath = type.namespace.replace(/\./g, '/');
-
-          // If the conflict-free path is different from the original path,
-          // we need to ensure the type is declared in the accessible path
-          if (conflictFreePath !== originalPath) {
-            // Check if we need to create an additional mod.rs file
-            if (conflictFreePath !== '') {
-              const modFilePath = `src/${conflictFreePath}/mod.rs`;
-              // Only add if not already added by the main loop
-              if (!nestedModules.has(conflictFreePath.replace(/\//g, '.'))) {
-                const content: string[] = [];
-                content.push(`pub mod ${type.name};`);
-
-                this.collectModFileContent(modFilePath, content);
-              }
-            }
-          }
-        }
-      }
-    }
   }
 
   private generateIntermediateModFiles(): void {
@@ -2595,32 +2554,10 @@ class RustGenerator extends Generator {
     namespace: string,
     _typeName: string,
   ): string {
-    const conflicts = ((this as any).nameConflicts as Set<string>) || new Set();
-
-    // Split the namespace into parts
-    const namespaceParts = namespace.split('.');
-    const result: string[] = [];
-
-    // Check each namespace part to see if it conflicts with a type name
-    for (let i = 0; i < namespaceParts.length; i++) {
-      const currentPart = namespaceParts[i];
-      const partialNamespace = namespaceParts.slice(0, i + 1).join('.');
-
-      // Check if this namespace part conflicts with a type name
-      if (conflicts.has(partialNamespace)) {
-        // Skip this part to avoid filesystem conflict
-        continue;
-      }
-
-      result.push(currentPart);
-    }
-
-    // If we skipped all parts, use the flattened name
-    if (result.length === 0) {
-      return namespace.replace(/\./g, '');
-    }
-
-    return result.join('/');
+    // For JSII namespaces, always preserve the full directory structure
+    // because the generated file layout is deterministic and conflicts
+    // are handled by putting each type in its own directory/module
+    return namespace.replace(/\./g, '/');
   }
 
   private collectModFileContent(path: string, content: string[]) {
@@ -2993,10 +2930,11 @@ class RustGenerator extends Generator {
           if (type.namespace && type.namespace.split('.')[0] === module) {
             const namespaceParts = type.namespace.split('.');
             if (namespaceParts.length === 1) {
-              // Direct child of this namespace
+              // Direct child of this namespace - this is a type directly in this module
               children.add(type.name);
             } else {
-              // Nested namespace - add the next level
+              // Nested namespace - add the next level namespace only
+              // Don't process individual types in deeply nested namespaces here
               children.add(namespaceParts[1]);
             }
           }
