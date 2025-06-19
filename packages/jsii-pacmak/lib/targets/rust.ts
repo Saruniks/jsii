@@ -800,55 +800,288 @@ class RustGenerator extends Generator {
     // 🚀 Implement base stub traits for all Impl structs (but only if not already implemented)
     content.push(`// Implement base stub traits`);
 
-    // Only implement Operation if it's not a BinaryOperation, UnaryOperation, or CompositeOperation class
-    const skipOperation = [
-      // 'Operation',
-      'BinaryOperation',
-      'UnaryOperation',
-      'CompositeOperation',
-      'StaticConsumer',
-      'Very',
-      'Base',
-    ].includes(className);
-    if (!skipOperation) {
-      //   content.push(`impl Operation for ${className}Impl {`);
-      //   content.push(`    fn toString(&self) -> String {`);
-      //   content.push(`        // Delegate to JSII runtime`);
-      //   content.push(`        todo!("Operation::toString not implemented")`);
-      //   content.push(`    }`);
-      //   content.push(`}`);
-      //   implementedTraits.add('Operation');
-
-      //   // Operation extends NumericValue, so implement that too
-      //   if (!implementedTraits.has('NumericValue')) {
-      //     content.push(`impl NumericValue for ${className}Impl {`);
-      //     content.push(`    fn get_value(&self) -> f64 {`);
-      //     content.push(`        // Delegate to JSII runtime`);
-      //     content.push(
-      //       `        todo!("NumericValue::get_value not implemented")`,
-      //     );
-      //     content.push(`    }`);
-      //     content.push(`}`);
-      //     implementedTraits.add('NumericValue');
-      //   }
-
-      // NumericValue extends Base, so implement that too
-      if (!implementedTraits.has('Base')) {
-        // content.push(use)
-        content.push(
-          `impl ascopeajsiiacalcabase::Base::Base::Base for ${className}Impl {`,
-        );
-        content.push(`    fn typeName(&self) -> Box<dyn std::any::Any> {`);
-        content.push(`        // Delegate to JSII runtime`);
-        content.push(`        todo!("Base::typeName not implemented")`);
-        content.push(`    }`);
-        content.push(`}`);
-        implementedTraits.add('Base');
-      }
+    // Always implement Base trait for all classes
+    if (!implementedTraits.has('Base')) {
+      content.push(
+        `impl ascopeajsiiacalcabase::Base::Base::Base for ${className}Impl {`,
+      );
+      content.push(`    fn typeName(&self) -> Box<dyn std::any::Any> {`);
+      content.push(`        // Delegate to JSII runtime`);
+      content.push(`        todo!("Base::typeName not implemented")`);
+      content.push(`    }`);
+      content.push(`}`);
+      implementedTraits.add('Base');
     }
 
-    // IFriendly implementation is now handled by proper interface resolution
-    // Only classes that explicitly implement IFriendly or interfaces extending it will get the implementation
+    // 🚀 Implement required traits that are supertraits of the main class trait
+    // For example, if BinaryOperation extends Operation + IFriendly, then
+    // BinaryOperationImpl needs to implement Operation and IFriendly
+
+    // Check if this class's trait has supertraits and implement them
+    if (cls.interfaces || cls.base) {
+      const requiredTraits = new Set<string>();
+
+      // Collect all interface requirements
+      if (cls.interfaces) {
+        for (const iface of cls.interfaces) {
+          const ifaceName = iface.split('.').pop() ?? iface;
+          requiredTraits.add(ifaceName);
+
+          // Also check for transitive interface requirements
+          if (this.currentAssembly?.types) {
+            const ifaceType = this.currentAssembly.types[iface];
+            if (
+              ifaceType?.kind === TypeKind.Interface &&
+              ifaceType.interfaces
+            ) {
+              for (const nestedIface of ifaceType.interfaces) {
+                const nestedIfaceName =
+                  nestedIface.split('.').pop() ?? nestedIface;
+                requiredTraits.add(nestedIfaceName);
+              }
+            }
+          }
+        }
+      }
+
+      // For classes that need Operation trait (e.g., BinaryOperation, UnaryOperation, CompositeOperation)
+      const operationClasses = [
+        'BinaryOperation',
+        'UnaryOperation',
+        'CompositeOperation',
+      ];
+      if (operationClasses.includes(className)) {
+        requiredTraits.add('Operation');
+        requiredTraits.add('NumericValue'); // Operation extends NumericValue
+      }
+
+      // Implement each required trait
+      for (const traitName of requiredTraits) {
+        if (!implementedTraits.has(traitName)) {
+          content.push(`impl ${traitName} for ${className}Impl {`);
+
+          // Handle specific trait implementations
+          if (traitName === 'Operation') {
+            content.push(`    fn toString(&self) -> String {`);
+            content.push(
+              `        let client = client().expect("JSII client not initialized");`,
+            );
+            content.push(`        let mut client = client.lock().unwrap();`);
+            content.push(`        let args = vec![];`);
+            content.push(
+              `        let response = client.invoke(self.objref.clone(), "toString".to_string(), args)`,
+            );
+            content.push(
+              `            .expect("Failed to invoke method toString");`,
+            );
+            content.push(
+              `        response.result.as_str().unwrap_or("").to_string()`,
+            );
+            content.push(`    }`);
+          } else if (traitName === 'NumericValue') {
+            content.push(`    fn get_value(&self) -> f64 {`);
+            content.push(
+              `        let client = client().expect("JSII client not initialized");`,
+            );
+            content.push(`        let mut client = client.lock().unwrap();`);
+            content.push(
+              `        let response = client.get(self.objref.clone(), "value".to_string())`,
+            );
+            content.push(
+              `            .expect("Failed to get property value");`,
+            );
+            content.push(`        response.value.as_f64().unwrap_or(0.0)`);
+            content.push(`    }`);
+            content.push(`    fn toString(&self) -> String {`);
+            content.push(
+              `        let client = client().expect("JSII client not initialized");`,
+            );
+            content.push(`        let mut client = client.lock().unwrap();`);
+            content.push(`        let args = vec![];`);
+            content.push(
+              `        let response = client.invoke(self.objref.clone(), "toString".to_string(), args)`,
+            );
+            content.push(
+              `            .expect("Failed to invoke method toString");`,
+            );
+            content.push(
+              `        response.result.as_str().unwrap_or("").to_string()`,
+            );
+            content.push(`    }`);
+          } else if (traitName === 'IFriendly') {
+            content.push(`    fn hello(&self) -> String {`);
+            content.push(
+              `        let client = client().expect("JSII client not initialized");`,
+            );
+            content.push(`        let mut client = client.lock().unwrap();`);
+            content.push(`        let args = vec![];`);
+            content.push(
+              `        let response = client.invoke(self.objref.clone(), "hello".to_string(), args)`,
+            );
+            content.push(
+              `            .expect("Failed to invoke method hello");`,
+            );
+            content.push(
+              `        response.result.as_str().unwrap_or("").to_string()`,
+            );
+            content.push(`    }`);
+          } else if (this.currentAssembly?.types) {
+            // Handle interfaces defined in the assembly
+            const matchingFqn = Object.keys(this.currentAssembly.types).find(
+              (fqn) => fqn.endsWith(`.${traitName}`),
+            );
+            if (matchingFqn) {
+              const ifaceType = this.currentAssembly.types[matchingFqn];
+              if (ifaceType?.kind === TypeKind.Interface) {
+                // Implement the interface's methods and properties
+                for (const prop of ifaceType.properties ?? []) {
+                  const rustType = this.toRustType(prop.type);
+                  const rustName = reservedWords(prop.name);
+
+                  content.push(
+                    `    fn get_${rustName}(&self) -> ${rustType} {`,
+                  );
+                  content.push(
+                    `        let client = client().expect("JSII client not initialized");`,
+                  );
+                  content.push(
+                    `        let mut client = client.lock().unwrap();`,
+                  );
+                  content.push(
+                    `        let response = client.get(self.objref.clone(), "${prop.name}".to_string())`,
+                  );
+                  content.push(
+                    `            .expect("Failed to get property ${prop.name}");`,
+                  );
+
+                  // Generate proper conversion based on type
+                  if (rustType === 'String') {
+                    content.push(
+                      `        response.value.as_str().unwrap_or("").to_string()`,
+                    );
+                  } else if (rustType === 'f64') {
+                    content.push(
+                      `        response.value.as_f64().unwrap_or(0.0)`,
+                    );
+                  } else if (rustType === 'bool') {
+                    content.push(
+                      `        response.value.as_bool().unwrap_or(false)`,
+                    );
+                  } else {
+                    content.push(
+                      `        todo!("Convert JSII response to ${rustType}")`,
+                    );
+                  }
+                  content.push(`    }`);
+
+                  if (!prop.immutable) {
+                    content.push(
+                      `    fn set_${rustName}(&mut self, value: ${rustType}) {`,
+                    );
+                    content.push(
+                      `        let client = client().expect("JSII client not initialized");`,
+                    );
+                    content.push(
+                      `        let mut client = client.lock().unwrap();`,
+                    );
+
+                    // Convert value to JSON based on type
+                    if (rustType === 'String') {
+                      content.push(
+                        `        let json_value = Value::String(value);`,
+                      );
+                    } else if (rustType === 'f64') {
+                      content.push(
+                        `        let json_value = serde_json::Number::from_f64(value).map(Value::Number).unwrap_or(Value::Null);`,
+                      );
+                    } else if (rustType === 'bool') {
+                      content.push(
+                        `        let json_value = Value::Bool(value);`,
+                      );
+                    } else {
+                      content.push(
+                        `        let json_value = Value::Null; // TODO: Convert ${rustType} to JSON`,
+                      );
+                    }
+
+                    content.push(
+                      `        client.set(self.objref.clone(), "${prop.name}".to_string(), json_value)`,
+                    );
+                    content.push(
+                      `            .expect("Failed to set property ${prop.name}");`,
+                    );
+                    content.push(`    }`);
+                  }
+                }
+
+                for (const method of ifaceType.methods ?? []) {
+                  const params =
+                    method.parameters
+                      ?.map((param) => {
+                        const rustType = this.toRustType(param.type);
+                        const rustName = reservedWords(param.name);
+                        return param.optional
+                          ? `${rustName}: Option<${rustType}>`
+                          : `${rustName}: ${rustType}`;
+                      })
+                      .join(', ') ?? '';
+
+                  const methodName = reservedWords(method.name);
+                  const returnType = method.returns
+                    ? this.toRustType(method.returns.type)
+                    : '()';
+
+                  content.push(
+                    `    fn ${methodName}(&self${params ? `, ${params}` : ''}) -> ${returnType} {`,
+                  );
+                  content.push(
+                    `        let client = client().expect("JSII client not initialized");`,
+                  );
+                  content.push(
+                    `        let mut client = client.lock().unwrap();`,
+                  );
+                  content.push(
+                    `        let args = vec![]; // TODO: Convert parameters to JSON`,
+                  );
+                  content.push(
+                    `        let response = client.invoke(self.objref.clone(), "${method.name}".to_string(), args)`,
+                  );
+                  content.push(
+                    `            .expect("Failed to invoke method ${method.name}");`,
+                  );
+
+                  // Generate proper return conversion
+                  if (returnType === 'String') {
+                    content.push(
+                      `        response.result.as_str().unwrap_or("").to_string()`,
+                    );
+                  } else if (returnType === 'f64') {
+                    content.push(
+                      `        response.result.as_f64().unwrap_or(0.0)`,
+                    );
+                  } else if (returnType === 'bool') {
+                    content.push(
+                      `        response.result.as_bool().unwrap_or(false)`,
+                    );
+                  } else if (returnType === '()') {
+                    content.push(`        // void return`);
+                  } else {
+                    content.push(
+                      `        todo!("Convert JSII response to ${returnType}")`,
+                    );
+                  }
+                  content.push(`    }`);
+                }
+              }
+            }
+          }
+
+          content.push(`}`);
+          content.push('');
+          implementedTraits.add(traitName);
+        }
+      }
+    }
 
     // 🚀 Add missing external trait implementations based on class name
     const externalTraitMap: Record<string, string[]> = {
@@ -884,8 +1117,16 @@ class RustGenerator extends Generator {
         );
         content.push(`    }`);
       } else if (traitName === 'IBaseInterface') {
-        content.push(`    fn bar(&self) -> String {`);
-        content.push(`        todo!("IBaseInterface::bar not implemented")`);
+        content.push(`    fn bar(&self) -> () {`);
+        content.push(
+          `        let client = client().expect("JSII client not initialized");`,
+        );
+        content.push(`        let mut client = client.lock().unwrap();`);
+        content.push(`        let args = vec![];`);
+        content.push(
+          `        client.invoke(self.objref.clone(), "bar".to_string(), args)`,
+        );
+        content.push(`            .expect("Failed to invoke method bar");`);
         content.push(`    }`);
       } else if (this.currentAssembly?.types) {
         // Handle interfaces defined in the assembly
@@ -980,8 +1221,38 @@ class RustGenerator extends Generator {
               content.push(
                 `    fn ${methodName}(&self${params ? `, ${params}` : ''}) -> ${returnType} {`,
               );
-              content.push(`        // Delegate to JSII runtime`);
-              content.push(`        todo!("Call JSII runtime")`);
+              content.push(
+                `        let client = client().expect("JSII client not initialized");`,
+              );
+              content.push(`        let mut client = client.lock().unwrap();`);
+              content.push(
+                `        let args = vec![]; // TODO: Convert parameters to JSON`,
+              );
+              content.push(
+                `        let response = client.invoke(self.objref.clone(), "${method.name}".to_string(), args)`,
+              );
+              content.push(
+                `            .expect("Failed to invoke method ${method.name}");`,
+              );
+
+              // Generate proper return conversion
+              if (returnType === 'String') {
+                content.push(
+                  `        response.result.as_str().unwrap_or("").to_string()`,
+                );
+              } else if (returnType === 'f64') {
+                content.push(`        response.result.as_f64().unwrap_or(0.0)`);
+              } else if (returnType === 'bool') {
+                content.push(
+                  `        response.result.as_bool().unwrap_or(false)`,
+                );
+              } else if (returnType === '()') {
+                content.push(`        // void return`);
+              } else {
+                content.push(
+                  `        todo!("Convert JSII response to ${returnType}")`,
+                );
+              }
               content.push(`    }`);
             }
 
@@ -991,16 +1262,69 @@ class RustGenerator extends Generator {
               const rustName = reservedWords(prop.name);
 
               content.push(`    fn get_${rustName}(&self) -> ${rustType} {`);
-              content.push(`        // Delegate to JSII runtime`);
-              content.push(`        todo!("Call JSII runtime")`);
+              content.push(
+                `        let client = client().expect("JSII client not initialized");`,
+              );
+              content.push(`        let mut client = client.lock().unwrap();`);
+              content.push(
+                `        let response = client.get(self.objref.clone(), "${prop.name}".to_string())`,
+              );
+              content.push(
+                `            .expect("Failed to get property ${prop.name}");`,
+              );
+
+              // Generate proper conversion based on type
+              if (rustType === 'String') {
+                content.push(
+                  `        response.value.as_str().unwrap_or("").to_string()`,
+                );
+              } else if (rustType === 'f64') {
+                content.push(`        response.value.as_f64().unwrap_or(0.0)`);
+              } else if (rustType === 'bool') {
+                content.push(
+                  `        response.value.as_bool().unwrap_or(false)`,
+                );
+              } else {
+                content.push(
+                  `        todo!("Convert JSII response to ${rustType}")`,
+                );
+              }
               content.push(`    }`);
 
               if (!prop.immutable) {
                 content.push(
                   `    fn set_${rustName}(&mut self, value: ${rustType}) {`,
                 );
-                content.push(`        // Delegate to JSII runtime`);
-                content.push(`        todo!("Call JSII runtime")`);
+                content.push(
+                  `        let client = client().expect("JSII client not initialized");`,
+                );
+                content.push(
+                  `        let mut client = client.lock().unwrap();`,
+                );
+
+                // Convert value to JSON based on type
+                if (rustType === 'String') {
+                  content.push(
+                    `        let json_value = Value::String(value);`,
+                  );
+                } else if (rustType === 'f64') {
+                  content.push(
+                    `        let json_value = serde_json::Number::from_f64(value).map(Value::Number).unwrap_or(Value::Null);`,
+                  );
+                } else if (rustType === 'bool') {
+                  content.push(`        let json_value = Value::Bool(value);`);
+                } else {
+                  content.push(
+                    `        let json_value = Value::Null; // TODO: Convert ${rustType} to JSON`,
+                  );
+                }
+
+                content.push(
+                  `        client.set(self.objref.clone(), "${prop.name}".to_string(), json_value)`,
+                );
+                content.push(
+                  `            .expect("Failed to set property ${prop.name}");`,
+                );
                 content.push(`    }`);
               }
             }
@@ -1030,16 +1354,75 @@ class RustGenerator extends Generator {
                 const rustName = reservedWords(prop.name);
 
                 content.push(`    fn get_${rustName}(&self) -> ${rustType} {`);
-                content.push(`        // Delegate to JSII runtime`);
-                content.push(`        todo!("Call JSII runtime")`);
+                content.push(
+                  `        let client = client().expect("JSII client not initialized");`,
+                );
+                content.push(
+                  `        let mut client = client.lock().unwrap();`,
+                );
+                content.push(
+                  `        let response = client.get(self.objref.clone(), "${prop.name}".to_string())`,
+                );
+                content.push(
+                  `            .expect("Failed to get property ${prop.name}");`,
+                );
+
+                // Generate proper conversion based on type
+                if (rustType === 'String') {
+                  content.push(
+                    `        response.value.as_str().unwrap_or("").to_string()`,
+                  );
+                } else if (rustType === 'f64') {
+                  content.push(
+                    `        response.value.as_f64().unwrap_or(0.0)`,
+                  );
+                } else if (rustType === 'bool') {
+                  content.push(
+                    `        response.value.as_bool().unwrap_or(false)`,
+                  );
+                } else {
+                  content.push(
+                    `        todo!("Convert JSII response to ${rustType}")`,
+                  );
+                }
                 content.push(`    }`);
 
                 if (!prop.immutable) {
                   content.push(
                     `    fn set_${rustName}(&mut self, value: ${rustType}) {`,
                   );
-                  content.push(`        // Delegate to JSII runtime`);
-                  content.push(`        todo!("Call JSII runtime")`);
+                  content.push(
+                    `        let client = client().expect("JSII client not initialized");`,
+                  );
+                  content.push(
+                    `        let mut client = client.lock().unwrap();`,
+                  );
+
+                  // Convert value to JSON based on type
+                  if (rustType === 'String') {
+                    content.push(
+                      `        let json_value = Value::String(value);`,
+                    );
+                  } else if (rustType === 'f64') {
+                    content.push(
+                      `        let json_value = serde_json::Number::from_f64(value).map(Value::Number).unwrap_or(Value::Null);`,
+                    );
+                  } else if (rustType === 'bool') {
+                    content.push(
+                      `        let json_value = Value::Bool(value);`,
+                    );
+                  } else {
+                    content.push(
+                      `        let json_value = Value::Null; // TODO: Convert ${rustType} to JSON`,
+                    );
+                  }
+
+                  content.push(
+                    `        client.set(self.objref.clone(), "${prop.name}".to_string(), json_value)`,
+                  );
+                  content.push(
+                    `            .expect("Failed to set property ${prop.name}");`,
+                  );
                   content.push(`    }`);
                 }
               }
@@ -1065,8 +1448,42 @@ class RustGenerator extends Generator {
                 content.push(
                   `    fn ${methodName}(&self${params ? `, ${params}` : ''}) -> ${returnType} {`,
                 );
-                content.push(`        // Delegate to JSII runtime`);
-                content.push(`        todo!("Call JSII runtime")`);
+                content.push(
+                  `        let client = client().expect("JSII client not initialized");`,
+                );
+                content.push(
+                  `        let mut client = client.lock().unwrap();`,
+                );
+                content.push(
+                  `        let args = vec![]; // TODO: Convert parameters to JSON`,
+                );
+                content.push(
+                  `        let response = client.invoke(self.objref.clone(), "${method.name}".to_string(), args)`,
+                );
+                content.push(
+                  `            .expect("Failed to invoke method ${method.name}");`,
+                );
+
+                // Generate proper return conversion
+                if (returnType === 'String') {
+                  content.push(
+                    `        response.result.as_str().unwrap_or("").to_string()`,
+                  );
+                } else if (returnType === 'f64') {
+                  content.push(
+                    `        response.result.as_f64().unwrap_or(0.0)`,
+                  );
+                } else if (returnType === 'bool') {
+                  content.push(
+                    `        response.result.as_bool().unwrap_or(false)`,
+                  );
+                } else if (returnType === '()') {
+                  content.push(`        // void return`);
+                } else {
+                  content.push(
+                    `        todo!("Convert JSII response to ${returnType}")`,
+                  );
+                }
                 content.push(`    }`);
               }
             }
@@ -1113,8 +1530,16 @@ class RustGenerator extends Generator {
           );
           content.push(`    }`);
         } else if (ifaceName === 'IBaseInterface') {
-          content.push(`    fn bar(&self) -> String {`);
-          content.push(`        todo!("IBaseInterface::bar not implemented")`);
+          content.push(`    fn bar(&self) -> () {`);
+          content.push(
+            `        let client = client().expect("JSII client not initialized");`,
+          );
+          content.push(`        let mut client = client.lock().unwrap();`);
+          content.push(`        let args = vec![];`);
+          content.push(
+            `        client.invoke(self.objref.clone(), "bar".to_string(), args)`,
+          );
+          content.push(`            .expect("Failed to invoke method bar");`);
           content.push(`    }`);
         } else if (this.currentAssembly?.types) {
           // Handle interfaces defined in the assembly
