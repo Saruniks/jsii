@@ -800,14 +800,31 @@ class RustGenerator extends Generator {
     // 🚀 Implement base stub traits for all Impl structs (but only if not already implemented)
     content.push(`// Implement base stub traits`);
 
-    // Always implement Base trait for all classes
-    if (!implementedTraits.has('Base')) {
+    // Only implement Base trait for classes that don't create circular dependencies
+    // Avoid implementing Base trait in @scope/jsii-calc-base-of-base since it would create a circular dependency
+    const assemblyName = this.currentAssembly?.name ?? '';
+    const shouldImplementBase =
+      assemblyName !== 'ascopeajsiiacalcabaseaofabase' &&
+      assemblyName !== 'ascopeajsiiacalcabase';
+
+    if (shouldImplementBase && !implementedTraits.has('Base')) {
       content.push(
         `impl ascopeajsiiacalcabase::Base::Base::Base for ${className}Impl {`,
       );
       content.push(`    fn typeName(&self) -> Box<dyn std::any::Any> {`);
       content.push(`        // Delegate to JSII runtime`);
-      content.push(`        todo!("Base::typeName not implemented")`);
+      content.push(
+        `        let client = client().expect("JSII client not initialized");`,
+      );
+      content.push(`        let mut client = client.lock().unwrap();`);
+      content.push(`        let args = vec![];`);
+      content.push(
+        `        let response = client.invoke(self.objref.clone(), "typeName".to_string(), args)`,
+      );
+      content.push(`            .expect("Failed to invoke method typeName");`);
+      content.push(
+        `        todo!("Convert JSII response to Box<dyn std::any::Any>")`,
+      );
       content.push(`    }`);
       content.push(`}`);
       implementedTraits.add('Base');
