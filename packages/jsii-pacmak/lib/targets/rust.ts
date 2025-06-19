@@ -874,27 +874,37 @@ class RustGenerator extends Generator {
         // THEN: Implement this trait
         content.push(`impl ${traitName} for ${cls.name}Impl {`);
 
-        // Generate property getters/setters
-        for (const prop of typeDefinition.properties ?? []) {
-          const rustType = this.toRustType(prop.type);
-          const rustName = reservedWords(prop.name);
+        // Generate properties for interfaces and for non-Base classes
+        // Only skip properties for the Base trait to avoid conflicts
+        const shouldGenerateProperties =
+          typeDefinition.kind === TypeKind.Interface ||
+          (typeDefinition.kind === TypeKind.Class && traitName !== 'Base');
 
-          // Getter
-          content.push(`    fn get_${rustName}(&self) -> ${rustType} {`);
-          content.push(`        todo!("Implement getter for ${prop.name}")`);
-          content.push(`    }`);
+        if (shouldGenerateProperties) {
+          // Generate property getters/setters
+          for (const prop of typeDefinition.properties ?? []) {
+            const rustType = this.toRustType(prop.type);
+            const rustName = reservedWords(prop.name);
 
-          // Setter (if mutable)
-          if (!prop.immutable) {
-            content.push(
-              `    fn set_${rustName}(&mut self, value: ${rustType}) {`,
-            );
-            content.push(`        todo!("Implement setter for ${prop.name}")`);
+            // Getter
+            content.push(`    fn get_${rustName}(&self) -> ${rustType} {`);
+            content.push(`        todo!("Implement getter for ${prop.name}")`);
             content.push(`    }`);
+
+            // Setter (if mutable)
+            if (!prop.immutable) {
+              content.push(
+                `    fn set_${rustName}(&mut self, value: ${rustType}) {`,
+              );
+              content.push(
+                `        todo!("Implement setter for ${prop.name}")`,
+              );
+              content.push(`    }`);
+            }
           }
         }
 
-        // Generate methods
+        // Generate methods for both interfaces and classes
         for (const method of typeDefinition.methods ?? []) {
           // Build parameter list
           const params =
@@ -942,7 +952,7 @@ class RustGenerator extends Generator {
     content: string[],
     implementedTraits: Set<string>,
   ): void {
-    // Handle known external traits
+    // Handle known external traits with specific implementations
     if (traitName === 'Base') {
       // Base trait from @scope/jsii-calc-base
       content.push(
@@ -950,6 +960,134 @@ class RustGenerator extends Generator {
       );
       content.push(`    fn typeName(&self) -> Box<dyn std::any::Any> {`);
       content.push(`        todo!("Implement method typeName")`);
+      content.push(`    }`);
+      content.push('}');
+      content.push('');
+      implementedTraits.add(traitName);
+    } else if (traitName === 'Operation') {
+      // Operation trait from @scope/jsii-calc-lib
+      content.push(
+        `impl ascopeajsiiacalcalib::Operation::Operation::Operation for ${cls.name}Impl {`,
+      );
+      content.push(`    fn toString(&self) -> String {`);
+      content.push(`        todo!("Implement method toString")`);
+      content.push(`    }`);
+      content.push('}');
+      content.push('');
+      implementedTraits.add(traitName);
+
+      // Operation extends NumericValue, so recursively implement that too
+      this.generateExternalTraitImplementation(
+        cls,
+        'NumericValue',
+        content,
+        implementedTraits,
+      );
+    } else if (traitName === 'NumericValue') {
+      // NumericValue trait from @scope/jsii-calc-lib
+      content.push(
+        `impl ascopeajsiiacalcalib::NumericValue::NumericValue::NumericValue for ${cls.name}Impl {`,
+      );
+      content.push(`    fn get_value(&self) -> f64 {`);
+      content.push(`        todo!("Implement getter for value")`);
+      content.push(`    }`);
+      content.push(`    fn toString(&self) -> String {`);
+      content.push(`        todo!("Implement method toString")`);
+      content.push(`    }`);
+      content.push('}');
+      content.push('');
+      implementedTraits.add(traitName);
+
+      // NumericValue extends Base, so recursively implement that too
+      this.generateExternalTraitImplementation(
+        cls,
+        'Base',
+        content,
+        implementedTraits,
+      );
+    } else if (traitName === 'IFriendly') {
+      // IFriendly trait from @scope/jsii-calc-lib
+      content.push(
+        `impl ascopeajsiiacalcalib::IFriendly::IFriendly::IFriendly for ${cls.name}Impl {`,
+      );
+      content.push(`    fn hello(&self) -> String {`);
+      content.push(`        todo!("Implement method hello")`);
+      content.push(`    }`);
+      content.push('}');
+      content.push('');
+      implementedTraits.add(traitName);
+    } else if (traitName === 'IFriendlier') {
+      // IFriendlier trait from jsii-calc, extends IFriendly
+      content.push(`impl IFriendlier for ${cls.name}Impl {`);
+      content.push(`    fn farewell(&self) -> String {`);
+      content.push(`        todo!("Implement method farewell")`);
+      content.push(`    }`);
+      content.push(`    fn goodbye(&self) -> String {`);
+      content.push(`        todo!("Implement method goodbye")`);
+      content.push(`    }`);
+      content.push('}');
+      content.push('');
+      implementedTraits.add(traitName);
+
+      // IFriendlier extends IFriendly
+      this.generateExternalTraitImplementation(
+        cls,
+        'IFriendly',
+        content,
+        implementedTraits,
+      );
+    } else if (traitName === 'IRandomNumberGenerator') {
+      // IRandomNumberGenerator trait from jsii-calc
+      content.push(`impl IRandomNumberGenerator for ${cls.name}Impl {`);
+      content.push(`    fn next(&self) -> f64 {`);
+      content.push(`        todo!("Implement method next")`);
+      content.push(`    }`);
+      content.push('}');
+      content.push('');
+      implementedTraits.add(traitName);
+    } else if (traitName === 'IFriendlyRandomGenerator') {
+      // IFriendlyRandomGenerator trait from jsii-calc, extends IFriendly + IRandomNumberGenerator
+      content.push(`impl IFriendlyRandomGenerator for ${cls.name}Impl {`);
+      content.push(
+        `    // Inherits all methods from IFriendly and IRandomNumberGenerator`,
+      );
+      content.push('}');
+      content.push('');
+      implementedTraits.add(traitName);
+
+      // Recursively implement parent traits
+      this.generateExternalTraitImplementation(
+        cls,
+        'IFriendly',
+        content,
+        implementedTraits,
+      );
+      this.generateExternalTraitImplementation(
+        cls,
+        'IRandomNumberGenerator',
+        content,
+        implementedTraits,
+      );
+    } else if (traitName === 'IDoublable') {
+      // IDoublable trait from @scope/jsii-calc-lib
+      content.push(
+        `impl ascopeajsiiacalcalib::IDoublable::IDoublable::IDoublable for ${cls.name}Impl {`,
+      );
+      content.push(`    fn get_doubleValue(&self) -> f64 {`);
+      content.push(`        todo!("Implement getter for doubleValue")`);
+      content.push(`    }`);
+      content.push('}');
+      content.push('');
+      implementedTraits.add(traitName);
+    } else if (traitName === 'IReflectable') {
+      // IReflectable trait from @scope/jsii-calc-lib.submodule
+      content.push(
+        `impl ascopeajsiiacalcalib::submodule::IReflectable::IReflectable::IReflectable for ${cls.name}Impl {`,
+      );
+      content.push(
+        `    fn get_entries(&self) -> Vec<Box<dyn ascopeajsiiacalcalib::submodule::ReflectableEntry::ReflectableEntry::ReflectableEntry>> {`,
+      );
+      content.push(`        todo!("Implement getter for entries")`);
       content.push(`    }`);
       content.push('}');
       content.push('');
