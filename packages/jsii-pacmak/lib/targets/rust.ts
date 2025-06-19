@@ -818,16 +818,31 @@ class RustGenerator extends Generator {
     implementedTraits: Set<string>,
   ): void {
     // If already implemented, skip to avoid duplicates
-    if (implementedTraits.has(traitName)) {
+    const shortName = traitName.split('.').pop() ?? traitName;
+    if (implementedTraits.has(traitName) || implementedTraits.has(shortName)) {
       return;
     }
 
-    // Find interface by short name pattern in current assembly
-    const matchingFqn = Object.keys(this.currentAssembly?.types ?? {}).find(
-      (fqn) => fqn.endsWith(`.${traitName}`),
-    );
+    // First try exact FQN match, then fall back to short name pattern matching
+    let matchingFqn = this.currentAssembly?.types?.[traitName]
+      ? traitName
+      : null;
 
-    if (matchingFqn) {
+    if (!matchingFqn) {
+      // Fall back to short name pattern matching
+      const shortName = traitName.split('.').pop() ?? traitName;
+      matchingFqn =
+        Object.keys(this.currentAssembly?.types ?? {}).find((fqn) =>
+          fqn.endsWith(`.${shortName}`),
+        ) ?? null;
+    }
+
+    // Check if this is an external trait (from a different assembly)
+    const currentAssemblyName = this.currentAssembly?.name ?? '';
+    const isExternalTrait =
+      matchingFqn === null || !traitName.startsWith(currentAssemblyName);
+
+    if (matchingFqn && !isExternalTrait) {
       const typeDefinition = this.currentAssembly?.types?.[matchingFqn];
       if (
         typeDefinition &&
@@ -850,21 +865,20 @@ class RustGenerator extends Generator {
         } else if (typeDefinition.kind === TypeKind.Class) {
           // For classes, implement the base class
           if (typeDefinition.base) {
-            const baseTraitName =
-              typeDefinition.base.split('.').pop() ?? typeDefinition.base;
+            // Use full FQN for base class to avoid ambiguity
             this.generateTraitImplementationsRecursive(
               cls,
-              baseTraitName,
+              typeDefinition.base, // Use full FQN, not just short name
               content,
               implementedTraits,
             );
           }
           // Also implement any interfaces the class implements
           for (const iface of typeDefinition.interfaces ?? []) {
-            const ifaceTraitName = iface.split('.').pop() ?? iface;
+            // Use full FQN for interfaces to avoid ambiguity
             this.generateTraitImplementationsRecursive(
               cls,
-              ifaceTraitName,
+              iface, // Use full FQN, not just short name
               content,
               implementedTraits,
             );
@@ -872,13 +886,15 @@ class RustGenerator extends Generator {
         }
 
         // THEN: Implement this trait
-        content.push(`impl ${traitName} for ${cls.name}Impl {`);
+        // Extract short name for the impl statement
+        const shortTraitName = traitName.split('.').pop() ?? traitName;
+        content.push(`impl ${shortTraitName} for ${cls.name}Impl {`);
 
-        // Generate properties for interfaces and for non-Base classes
-        // Only skip properties for the Base trait to avoid conflicts
+        // Generate properties for interfaces and all local classes
+        // Only external Base trait from @scope/jsii-calc-base should skip properties
         const shouldGenerateProperties =
           typeDefinition.kind === TypeKind.Interface ||
-          (typeDefinition.kind === TypeKind.Class && traitName !== 'Base');
+          typeDefinition.kind === TypeKind.Class;
 
         if (shouldGenerateProperties) {
           // Generate property getters/setters
@@ -934,12 +950,15 @@ class RustGenerator extends Generator {
         content.push('}');
         content.push('');
         implementedTraits.add(traitName);
+        implementedTraits.add(shortTraitName); // Also track by short name
       }
     } else {
-      // Handle external assembly traits (like Base from @scope/jsii-calc-base)
+      // Handle external assembly traits (like Operation from @scope/jsii-calc-lib)
+      // Extract short name for external trait processing
+      const shortTraitName = traitName.split('.').pop() ?? traitName;
       this.generateExternalTraitImplementation(
         cls,
-        traitName,
+        shortTraitName,
         content,
         implementedTraits,
       );
@@ -966,8 +985,13 @@ class RustGenerator extends Generator {
       implementedTraits.add(traitName);
     } else if (traitName === 'Operation') {
       // Operation trait from @scope/jsii-calc-lib
+      const currentAssemblyName = this.currentAssembly?.name ?? '';
+      const traitPrefix =
+        currentAssemblyName === 'ascopeajsiiacalcalib'
+          ? 'crate'
+          : 'ascopeajsiiacalcalib';
       content.push(
-        `impl ascopeajsiiacalcalib::Operation::Operation::Operation for ${cls.name}Impl {`,
+        `impl ${traitPrefix}::Operation::Operation::Operation for ${cls.name}Impl {`,
       );
       content.push(`    fn toString(&self) -> String {`);
       content.push(`        todo!("Implement method toString")`);
@@ -985,8 +1009,13 @@ class RustGenerator extends Generator {
       );
     } else if (traitName === 'NumericValue') {
       // NumericValue trait from @scope/jsii-calc-lib
+      const currentAssemblyName = this.currentAssembly?.name ?? '';
+      const traitPrefix =
+        currentAssemblyName === 'ascopeajsiiacalcalib'
+          ? 'crate'
+          : 'ascopeajsiiacalcalib';
       content.push(
-        `impl ascopeajsiiacalcalib::NumericValue::NumericValue::NumericValue for ${cls.name}Impl {`,
+        `impl ${traitPrefix}::NumericValue::NumericValue::NumericValue for ${cls.name}Impl {`,
       );
       content.push(`    fn get_value(&self) -> f64 {`);
       content.push(`        todo!("Implement getter for value")`);
@@ -1007,8 +1036,13 @@ class RustGenerator extends Generator {
       );
     } else if (traitName === 'IFriendly') {
       // IFriendly trait from @scope/jsii-calc-lib
+      const currentAssemblyName = this.currentAssembly?.name ?? '';
+      const traitPrefix =
+        currentAssemblyName === 'ascopeajsiiacalcalib'
+          ? 'crate'
+          : 'ascopeajsiiacalcalib';
       content.push(
-        `impl ascopeajsiiacalcalib::IFriendly::IFriendly::IFriendly for ${cls.name}Impl {`,
+        `impl ${traitPrefix}::IFriendly::IFriendly::IFriendly for ${cls.name}Impl {`,
       );
       content.push(`    fn hello(&self) -> String {`);
       content.push(`        todo!("Implement method hello")`);
@@ -1070,8 +1104,13 @@ class RustGenerator extends Generator {
       );
     } else if (traitName === 'IDoublable') {
       // IDoublable trait from @scope/jsii-calc-lib
+      const currentAssemblyName = this.currentAssembly?.name ?? '';
+      const traitPrefix =
+        currentAssemblyName === 'ascopeajsiiacalcalib'
+          ? 'crate'
+          : 'ascopeajsiiacalcalib';
       content.push(
-        `impl ascopeajsiiacalcalib::IDoublable::IDoublable::IDoublable for ${cls.name}Impl {`,
+        `impl ${traitPrefix}::IDoublable::IDoublable::IDoublable for ${cls.name}Impl {`,
       );
       content.push(`    fn get_doubleValue(&self) -> f64 {`);
       content.push(`        todo!("Implement getter for doubleValue")`);
@@ -1081,11 +1120,16 @@ class RustGenerator extends Generator {
       implementedTraits.add(traitName);
     } else if (traitName === 'IReflectable') {
       // IReflectable trait from @scope/jsii-calc-lib.submodule
+      const currentAssemblyName = this.currentAssembly?.name ?? '';
+      const traitPrefix =
+        currentAssemblyName === 'ascopeajsiiacalcalib'
+          ? 'crate'
+          : 'ascopeajsiiacalcalib';
       content.push(
-        `impl ascopeajsiiacalcalib::submodule::IReflectable::IReflectable::IReflectable for ${cls.name}Impl {`,
+        `impl ${traitPrefix}::submodule::IReflectable::IReflectable::IReflectable for ${cls.name}Impl {`,
       );
       content.push(
-        `    fn get_entries(&self) -> Vec<Box<dyn ascopeajsiiacalcalib::submodule::ReflectableEntry::ReflectableEntry::ReflectableEntry>> {`,
+        `    fn get_entries(&self) -> Vec<Box<dyn ${traitPrefix}::submodule::ReflectableEntry::ReflectableEntry::ReflectableEntry>> {`,
       );
       content.push(`        todo!("Implement getter for entries")`);
       content.push(`    }`);
@@ -1681,11 +1725,11 @@ class RustGenerator extends Generator {
     //           }
     //         }
     //       }
-    //     }
 
-    //     content.push(`}`);
-    //     content.push('');
-    //     implementedTraits.add(traitName);
+    //       content.push(`}`);
+    //       content.push('');
+    //       implementedTraits.add(traitName);
+    //     }
     //   }
     // }
 
@@ -3114,6 +3158,17 @@ class RustGenerator extends Generator {
           // For nested enums, import directly from parent type's directory
           // The parent class module should already have pub mod declarations
           const parentTypeName = parts[parts.length - 2];
+          const parentNamespacePath = this.getConflictFreeNamespacePath(
+            parts.slice(1, -2).join('.'),
+            parentTypeName,
+          ).replace(/\//g, '::');
+
+          if (parentNamespacePath) {
+            if (typeName !== alias) {
+              return `use crate::${parentNamespacePath}::${parentTypeName}::${typeName}::${typeName} as ${alias};`;
+            }
+            return `use crate::${parentNamespacePath}::${parentTypeName}::${typeName}::${typeName};`;
+          }
           if (typeName !== alias) {
             return `use crate::${parentTypeName}::${typeName}::${typeName} as ${alias};`;
           }
