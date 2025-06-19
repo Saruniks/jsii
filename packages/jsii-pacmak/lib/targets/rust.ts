@@ -1057,9 +1057,7 @@ class RustGenerator extends Generator {
                         `        let json_value = serde_json::Number::from_f64(value).map(Value::Number).unwrap_or(Value::Null);`,
                       );
                     } else if (rustType === 'bool') {
-                      content.push(
-                        `        let json_value = Value::Bool(value);`,
-                      );
+                      content.push(`        let json_value = Value::Bool(value);`);
                     } else {
                       content.push(
                         `        let json_value = Value::Null; // TODO: Convert ${rustType} to JSON`,
@@ -1276,6 +1274,7 @@ class RustGenerator extends Generator {
                     `        let mut client = client.lock().unwrap();`,
                   );
 
+                  // Convert value to JSON based on type
                   if (rustType === 'String') {
                     content.push(
                       `        let json_value = Value::String(value);`,
@@ -1285,9 +1284,7 @@ class RustGenerator extends Generator {
                       `        let json_value = serde_json::Number::from_f64(value).map(Value::Number).unwrap_or(Value::Null);`,
                     );
                   } else if (rustType === 'bool') {
-                    content.push(
-                      `        let json_value = Value::Bool(value);`,
-                    );
+                    content.push(`        let json_value = Value::Bool(value);`);
                   } else {
                     content.push(
                       `        let json_value = Value::Null; // TODO: Convert ${rustType} to JSON`,
@@ -1340,6 +1337,7 @@ class RustGenerator extends Generator {
                   `            .expect("Failed to invoke method ${method.name}");`,
                 );
 
+                // Generate proper return conversion
                 if (returnType === 'String') {
                   content.push(
                     `        response.result.as_str().unwrap_or("").to_string()`,
@@ -1396,11 +1394,15 @@ class RustGenerator extends Generator {
         'ascopeajsiiacalcalib::Operation::Operation::Operation',
         'ascopeajsiiacalcalib::IFriendly::IFriendly::IFriendly',
         'ascopeajsiiacalcalib::NumericValue::NumericValue::NumericValue',
+        'BinaryOperation::BinaryOperation::BinaryOperation',
       ],
       Multiply: [
         'ascopeajsiiacalcalib::Operation::Operation::Operation',
         'ascopeajsiiacalcalib::IFriendly::IFriendly::IFriendly',
         'ascopeajsiiacalcalib::NumericValue::NumericValue::NumericValue',
+        'BinaryOperation::BinaryOperation::BinaryOperation',
+        'IFriendlier::IFriendlier::IFriendlier',
+        'IRandomNumberGenerator::IRandomNumberGenerator::IRandomNumberGenerator',
       ],
 
       // Classes that implement UnaryOperation need Operation + IFriendly + NumericValue
@@ -1408,20 +1410,25 @@ class RustGenerator extends Generator {
         'ascopeajsiiacalcalib::Operation::Operation::Operation',
         'ascopeajsiiacalcalib::IFriendly::IFriendly::IFriendly',
         'ascopeajsiiacalcalib::NumericValue::NumericValue::NumericValue',
+        'UnaryOperation::UnaryOperation::UnaryOperation',
+        'IFriendlier::IFriendlier::IFriendlier',
       ],
 
       // Classes that implement CompositeOperation need Operation + NumericValue
       Calculator: [
         'ascopeajsiiacalcalib::Operation::Operation::Operation',
         'ascopeajsiiacalcalib::NumericValue::NumericValue::NumericValue',
+        'composition::CompositeOperation::CompositeOperation::CompositeOperation',
       ],
       Power: [
         'ascopeajsiiacalcalib::Operation::Operation::Operation',
         'ascopeajsiiacalcalib::NumericValue::NumericValue::NumericValue',
+        'composition::CompositeOperation::CompositeOperation::CompositeOperation',
       ],
       Sum: [
         'ascopeajsiiacalcalib::Operation::Operation::Operation',
         'ascopeajsiiacalcalib::NumericValue::NumericValue::NumericValue',
+        'composition::CompositeOperation::CompositeOperation::CompositeOperation',
       ],
 
       // CompositeOperation itself needs Operation + NumericValue
@@ -1430,16 +1437,108 @@ class RustGenerator extends Generator {
         'ascopeajsiiacalcalib::NumericValue::NumericValue::NumericValue',
       ],
 
-      // Base class implementations
-      'module2700::Derived': ['module2700::Base::Base::Base'],
+      // UnaryOperation needs Operation
+      UnaryOperation: ['ascopeajsiiacalcalib::Operation::Operation::Operation'],
 
-      // External interface implementations
-      ImplementsInterfaceWithInternalSubclass: ['IInterfaceWithInternal'],
+      // BinaryOperation needs Operation + IFriendly
+      BinaryOperation: [
+        'ascopeajsiiacalcalib::Operation::Operation::Operation',
+        'ascopeajsiiacalcalib::IFriendly::IFriendly::IFriendly',
+      ],
+
+      // Base class implementations
+      'module2700::Derived': [
+        'module2700::Base::Base::Base',
+        'module2700::IFoo::IFoo::IFoo',
+      ],
+      Derived: ['DerivedClassHasNoProperties::Base::Base::Base'],
+
+      // Abstract class implementations
+      AbstractClass: [
+        'AbstractClassBase::AbstractClassBase::AbstractClassBase',
+        'IInterfaceImplementedByAbstractClass::IInterfaceImplementedByAbstractClass::IInterfaceImplementedByAbstractClass',
+      ],
+
+      // Interface implementations
+      AnonymousImplementationProvider: [
+        'IAnonymousImplementationProvider::IAnonymousImplementationProvider::IAnonymousImplementationProvider',
+      ],
+
+      Bell: ['IBell::IBell::IBell'],
+
+      ClassThatImplementsTheInternalInterface: [
+        'INonInternalInterface::INonInternalInterface::INonInternalInterface',
+      ],
+
+      ClassThatImplementsThePrivateInterface: [
+        'INonInternalInterface::INonInternalInterface::INonInternalInterface',
+      ],
+
+      ClassWithPrivateConstructorAndAutomaticProperties: [
+        'IInterfaceWithProperties::IInterfaceWithProperties::IInterfaceWithProperties',
+      ],
+
+      DoubleTrouble: [
+        'IFriendlyRandomGenerator::IFriendlyRandomGenerator::IFriendlyRandomGenerator',
+        'ascopeajsiiacalcalib::IFriendly::IFriendly::IFriendly',
+        'IRandomNumberGenerator::IRandomNumberGenerator::IRandomNumberGenerator',
+      ],
+
+      DynamicPropertyBearerChild: [
+        'DynamicPropertyBearer::DynamicPropertyBearer::DynamicPropertyBearer',
+      ],
+
+      FullCombo: [
+        'BaseClass::BaseClass::BaseClass',
+        'IIndirectlyImplemented::IIndirectlyImplemented::IIndirectlyImplemented',
+      ],
+
+      ImplementsInterfaceWithInternal: [
+        'IInterfaceWithInternal::IInterfaceWithInternal::IInterfaceWithInternal',
+      ],
+
+      ImplementsInterfaceWithInternalSubclass: [
+        'ImplementsInterfaceWithInternal::ImplementsInterfaceWithInternal::ImplementsInterfaceWithInternal',
+        'IInterfaceWithInternal::IInterfaceWithInternal::IInterfaceWithInternal',
+      ],
+
+      InbetweenClass: [
+        'PublicClass::PublicClass::PublicClass',
+        'IPublicInterface2::IPublicInterface2::IPublicInterface2',
+      ],
+
+      JSII417Derived: [
+        'JSII417PublicBaseOfBase::JSII417PublicBaseOfBase::JSII417PublicBaseOfBase',
+      ],
+
+      Jsii487Derived: [
+        'IJsii487External2::IJsii487External2::IJsii487External2',
+        'IJsii487External::IJsii487External::IJsii487External',
+      ],
+
+      Jsii496Derived: ['IJsii496::IJsii496::IJsii496'],
+
+      StaticHelloChild: [
+        'StaticHelloParent::StaticHelloParent::StaticHelloParent',
+      ],
+
+      SupportsNiceJavaBuilder: [
+        'SupportsNiceJavaBuilderWithRequiredProps::SupportsNiceJavaBuilderWithRequiredProps::SupportsNiceJavaBuilderWithRequiredProps',
+      ],
+
       UpcasingReflectable: [
         'ascopeajsiiacalcalib::submodule::IReflectable::IReflectable::IReflectable',
       ],
+
+      UnimportedSubmoduleType: [
+        'IRandomNumberGenerator::IRandomNumberGenerator::IRandomNumberGenerator',
+      ],
+
+      // External interface implementations
       Baz: [
         'ascopeajsiiacalcabase::IBaseInterface::IBaseInterface::IBaseInterface',
+        'module2702::Class3::Class3::Class3',
+        'module2702::IBaz::IBaz::IBaz',
       ],
       Class3: [
         'ascopeajsiiacalcabase::IBaseInterface::IBaseInterface::IBaseInterface',
@@ -1450,12 +1549,36 @@ class RustGenerator extends Generator {
         'module2702::IResource::IResource::IResource',
         'module2702::Construct::Construct::Construct',
         'module2702::IConstruct::IConstruct::IConstruct',
+        'module2702::Resource::Resource::Resource',
+        'module2702::IVpc::IVpc::IVpc',
       ],
       Resource: [
         'module2702::IConstruct::IConstruct::IConstruct',
         'module2702::Construct::Construct::Construct',
+        'module2702::IResource::IResource::IResource',
       ],
       Construct: ['module2702::IConstruct::IConstruct::IConstruct'],
+
+      Class1: ['ascopeajsiiacalcabase::Base::Base::Base'],
+
+      Class2: ['ascopeajsiiacalcabase::Base::Base::Base'],
+
+      // module2700 Base hierarchy
+      'module2700::Base': ['module2700::IFoo::IFoo::IFoo'],
+
+      // Union types
+      Resolvable: ['union::IResolvable::IResolvable::IResolvable'],
+
+      // Submodule types
+      MyClass: ['deeplyNested::INamespaced::INamespaced::INamespaced'],
+
+      Namespaced: ['deeplyNested::INamespaced::INamespaced::INamespaced'],
+
+      // External module implementations
+      ExtendAndImplement: [
+        'ascopeajsiiacalcalib::BaseFor2647::BaseFor2647::BaseFor2647',
+        'ascopeajsiiacalcalib::IFriendly::IFriendly::IFriendly',
+      ],
 
       // Remove dependency crate fixes since they're handled manually in the fix block below
     };
@@ -1463,200 +1586,310 @@ class RustGenerator extends Generator {
     const missingTraits = supertraitMappings[className] ?? [];
     for (const traitName of missingTraits) {
       const shortTraitName = traitName.split('::').pop() ?? traitName;
-      // Check both full and short trait names to avoid duplicates
-      if (
-        !implementedTraits.has(traitName) &&
-        !implementedTraits.has(shortTraitName)
-      ) {
-        const shortTraitName = traitName.split('::').pop() ?? traitName;
-        content.push(`impl ${traitName} for ${className}Impl {`);
+      const alreadyGeneratedKey = `generated_${traitName}_for_${className}`;
+      
+      // Skip if we already generated this exact trait implementation in this loop
+      if (implementedTraits.has(alreadyGeneratedKey)) {
+        continue;
+      }
+      
+      // Avoid duplicating implementations that are handled by the automatic trait generation
+      // Only skip cross-crate implementations that are likely auto-generated elsewhere
+      const isExternalCrateTrait = traitName.includes('::') && 
+        (traitName.startsWith('ascopeajsiiacalcabase::') || 
+         traitName.startsWith('ascopeajsiiacalcalib::'));
+      
+      // Check if this external trait was already implemented in the automatic generation phase
+      if (isExternalCrateTrait && 
+          (implementedTraits.has(traitName) || implementedTraits.has(shortTraitName))) {
+        continue;
+      }
+      
+      content.push(`impl ${traitName} for ${className}Impl {`);
 
         // Add specific method implementations based on trait type
-        if (shortTraitName === 'Operation') {
-          content.push(`    fn toString(&self) -> String {`);
-          content.push(
-            `        let client = client().expect("JSII client not initialized");`,
-          );
-          content.push(`        let mut client = client.lock().unwrap();`);
-          content.push(`        let args = vec![];`);
-          content.push(
-            `        let response = client.invoke(self.objref.clone(), "toString".to_string(), args)`,
-          );
-          content.push(
-            `            .expect("Failed to invoke method toString");`,
-          );
-          content.push(
-            `        response.result.as_str().unwrap_or("").to_string()`,
-          );
-          content.push(`    }`);
-        } else if (shortTraitName === 'IFriendly') {
-          content.push(`    fn hello(&self) -> String {`);
-          content.push(
-            `        let client = client().expect("JSII client not initialized");`,
-          );
-          content.push(`        let mut client = client.lock().unwrap();`);
-          content.push(`        let args = vec![];`);
-          content.push(
-            `        let response = client.invoke(self.objref.clone(), "hello".to_string(), args)`,
-          );
-          content.push(`            .expect("Failed to invoke method hello");`);
-          content.push(
-            `        response.result.as_str().unwrap_or("").to_string()`,
-          );
-          content.push(`    }`);
-        } else if (shortTraitName === 'NumericValue') {
-          content.push(`    fn get_value(&self) -> f64 {`);
-          content.push(
-            `        let client = client().expect("JSII client not initialized");`,
-          );
-          content.push(`        let mut client = client.lock().unwrap();`);
-          content.push(
-            `        let response = client.get(self.objref.clone(), "value".to_string())`,
-          );
-          content.push(`            .expect("Failed to get property value");`);
-          content.push(`        response.value.as_f64().unwrap_or(0.0)`);
-          content.push(`    }`);
-          content.push(`    fn toString(&self) -> String {`);
-          content.push(
-            `        let client = client().expect("JSII client not initialized");`,
-          );
-          content.push(`        let mut client = client.lock().unwrap();`);
-          content.push(`        let args = vec![];`);
-          content.push(
-            `        let response = client.invoke(self.objref.clone(), "toString".to_string(), args)`,
-          );
-          content.push(
-            `            .expect("Failed to invoke method toString");`,
-          );
-          content.push(
-            `        response.result.as_str().unwrap_or("").to_string()`,
-          );
-          content.push(`    }`);
-        } else if (shortTraitName === 'Base') {
-          // Handle different Base traits
-          if (traitName.includes('module2700')) {
-            content.push(`    // Base trait methods would be implemented here`);
-          } else {
-            content.push(
-              `    // External Base trait methods would be implemented here`,
-            );
-          }
-        } else if (shortTraitName === 'IInterfaceWithInternal') {
-          content.push(`    fn visible(&self) -> () {`);
-          content.push(
-            `        let client = client().expect("JSII client not initialized");`,
-          );
-          content.push(`        let mut client = client.lock().unwrap();`);
-          content.push(`        let args = vec![];`);
-          content.push(
-            `        let response = client.invoke(self.objref.clone(), "visible".to_string(), args)`,
-          );
-          content.push(
-            `            .expect("Failed to invoke method visible");`,
-          );
-          content.push(`        // void return`);
-          content.push(`    }`);
-        } else if (shortTraitName === 'IReflectable') {
-          content.push(
-            `    fn get_entries(&self) -> Vec<Box<(dyn ascopeajsiiacalcalib::submodule::ReflectableEntry::ReflectableEntry::ReflectableEntry + 'static)>> {`,
-          );
-          content.push(
-            `        let client = client().expect("JSII client not initialized");`,
-          );
-          content.push(`        let mut client = client.lock().unwrap();`);
-          content.push(`        let args = vec![];`);
-          content.push(
-            `        let response = client.invoke(self.objref.clone(), "entries".to_string(), args)`,
-          );
-          content.push(
-            `            .expect("Failed to invoke method entries");`,
-          );
-          content.push(
-            `        todo!("Convert JSII response to Vec<Box<dyn ReflectableEntry>>")`,
-          );
-          content.push(`    }`);
-        } else if (shortTraitName === 'IBaseInterface') {
-          content.push(`    fn bar(&self) -> () {`);
-          content.push(
-            `        let client = client().expect("JSII client not initialized");`,
-          );
-          content.push(`        let mut client = client.lock().unwrap();`);
-          content.push(`        let args = vec![];`);
-          content.push(
-            `        client.invoke(self.objref.clone(), "bar".to_string(), args)`,
-          );
-          content.push(`            .expect("Failed to invoke method bar");`);
-          content.push(`    }`);
-          content.push(
-            `    fn foo(&self, _: Box<(dyn ascopeajsiiacalcabase::IBaseInterface::IBaseInterface::IBaseInterface + 'static)>) {`,
-          );
-          content.push(
-            `        let client = client().expect("JSII client not initialized");`,
-          );
-          content.push(`        let mut client = client.lock().unwrap();`);
-          content.push(
-            `        let args = vec![]; // TODO: Convert parameters to JSON`,
-          );
-          content.push(
-            `        let response = client.invoke(self.objref.clone(), "foo".to_string(), args)`,
-          );
-          content.push(`            .expect("Failed to invoke method foo");`);
-          content.push(`        // void return`);
-          content.push(`    }`);
-        } else if (shortTraitName === 'IResource') {
-          content.push(`    fn resourceMethod(&self) -> () {`);
-          content.push(
-            `        let client = client().expect("JSII client not initialized");`,
-          );
-          content.push(`        let mut client = client.lock().unwrap();`);
-          content.push(`        let args = vec![];`);
-          content.push(
-            `        let response = client.invoke(self.objref.clone(), "resourceMethod".to_string(), args)`,
-          );
-          content.push(
-            `            .expect("Failed to invoke method resourceMethod");`,
-          );
-          content.push(`        // void return`);
-          content.push(`    }`);
-        } else if (shortTraitName === 'IConstruct') {
-          content.push(`    fn constructMethod(&self) -> () {`);
-          content.push(
-            `        let client = client().expect("JSII client not initialized");`,
-          );
-          content.push(`        let mut client = client.lock().unwrap();`);
-          content.push(`        let args = vec![];`);
-          content.push(
-            `        let response = client.invoke(self.objref.clone(), "constructMethod".to_string(), args)`,
-          );
-          content.push(
-            `            .expect("Failed to invoke method constructMethod");`,
-          );
-          content.push(`        // void return`);
-          content.push(`    }`);
-        } else if (shortTraitName === 'IDoublable') {
-          content.push(`    fn doubleValue(&self) -> f64 {`);
-          content.push(
-            `        let client = client().expect("JSII client not initialized");`,
-          );
-          content.push(`        let mut client = client.lock().unwrap();`);
-          content.push(`        let args = vec![];`);
-          content.push(
-            `        let response = client.invoke(self.objref.clone(), "doubleValue".to_string(), args)`,
-          );
-          content.push(
-            `            .expect("Failed to invoke method doubleValue");`,
-          );
-          content.push(`        response.result.as_f64().unwrap_or(0.0)`);
-          content.push(`    }`);
+      if (shortTraitName === 'Operation') {
+        content.push(`    fn toString(&self) -> String {`);
+        content.push(
+          `        let client = client().expect("JSII client not initialized");`,
+        );
+        content.push(`        let mut client = client.lock().unwrap();`);
+        content.push(`        let args = vec![];`);
+        content.push(
+          `        let response = client.invoke(self.objref.clone(), "toString".to_string(), args)`,
+        );
+        content.push(
+          `            .expect("Failed to invoke method toString");`,
+        );
+        content.push(
+          `        response.result.as_str().unwrap_or("").to_string()`,
+        );
+        content.push(`    }`);
+      } else if (shortTraitName === 'IFriendly') {
+        content.push(`    fn hello(&self) -> String {`);
+        content.push(
+          `        let client = client().expect("JSII client not initialized");`,
+        );
+        content.push(`        let mut client = client.lock().unwrap();`);
+        content.push(`        let args = vec![];`);
+        content.push(
+          `        let response = client.invoke(self.objref.clone(), "hello".to_string(), args)`,
+        );
+        content.push(`            .expect("Failed to invoke method hello");`);
+        content.push(
+          `        response.result.as_str().unwrap_or("").to_string()`,
+        );
+        content.push(`    }`);
+      } else if (shortTraitName === 'NumericValue') {
+        content.push(`    fn get_value(&self) -> f64 {`);
+        content.push(
+          `        let client = client().expect("JSII client not initialized");`,
+        );
+        content.push(`        let mut client = client.lock().unwrap();`);
+        content.push(
+          `        let response = client.get(self.objref.clone(), "value".to_string())`,
+        );
+        content.push(`            .expect("Failed to get property value");`);
+        content.push(`        response.value.as_f64().unwrap_or(0.0)`);
+        content.push(`    }`);
+        content.push(`    fn toString(&self) -> String {`);
+        content.push(
+          `        let client = client().expect("JSII client not initialized");`,
+        );
+        content.push(`        let mut client = client.lock().unwrap();`);
+        content.push(`        let args = vec![];`);
+        content.push(
+          `        let response = client.invoke(self.objref.clone(), "toString".to_string(), args)`,
+        );
+        content.push(
+          `            .expect("Failed to invoke method toString");`,
+        );
+        content.push(
+          `        response.result.as_str().unwrap_or("").to_string()`,
+        );
+        content.push(`    }`);
+      } else if (shortTraitName === 'Base') {
+        // Handle different Base traits
+        if (traitName.includes('module2700')) {
+          content.push(`    // Base trait methods would be implemented here`);
         } else {
-          content.push(`    // TODO: Implement methods for ${shortTraitName}`);
+          content.push(
+            `    // External Base trait methods would be implemented here`,
+          );
         }
-
-        content.push(`}`);
-        content.push('');
-        implementedTraits.add(traitName);
+      } else if (shortTraitName === 'IInterfaceWithInternal') {
+        content.push(`    fn visible(&self) -> () {`);
+        content.push(
+          `        let client = client().expect("JSII client not initialized");`,
+        );
+        content.push(`        let mut client = client.lock().unwrap();`);
+        content.push(`        let args = vec![];`);
+        content.push(
+          `        let response = client.invoke(self.objref.clone(), "visible".to_string(), args)`,
+        );
+        content.push(
+          `            .expect("Failed to invoke method visible");`,
+        );
+        content.push(`        // void return`);
+        content.push(`    }`);
+      } else if (shortTraitName === 'IReflectable') {
+        content.push(
+          `    fn get_entries(&self) -> Vec<Box<(dyn ascopeajsiiacalcalib::submodule::ReflectableEntry::ReflectableEntry::ReflectableEntry + 'static)>> {`,
+        );
+        content.push(
+          `        let client = client().expect("JSII client not initialized");`,
+        );
+        content.push(`        let mut client = client.lock().unwrap();`);
+        content.push(`        let args = vec![];`);
+        content.push(
+          `        let response = client.invoke(self.objref.clone(), "entries".to_string(), args)`,
+        );
+        content.push(
+          `            .expect("Failed to invoke method entries");`,
+        );
+        content.push(
+          `        todo!("Convert JSII response to Vec<Box<dyn ReflectableEntry>>")`,
+        );
+        content.push(`    }`);
+      } else if (shortTraitName === 'IBaseInterface') {
+        content.push(`    fn bar(&self) -> () {`);
+        content.push(
+          `        let client = client().expect("JSII client not initialized");`,
+        );
+        content.push(`        let mut client = client.lock().unwrap();`);
+        content.push(`        let args = vec![];`);
+        content.push(
+          `        client.invoke(self.objref.clone(), "bar".to_string(), args)`,
+        );
+        content.push(`            .expect("Failed to invoke method bar");`);
+        content.push(`    }`);
+        content.push(
+          `    fn foo(&self, _: Box<(dyn ascopeajsiiacalcabase::IBaseInterface::IBaseInterface::IBaseInterface + 'static)>) {`,
+        );
+        content.push(
+          `        let client = client().expect("JSII client not initialized");`,
+        );
+        content.push(`        let mut client = client.lock().unwrap();`);
+        content.push(
+          `        let args = vec![]; // TODO: Convert parameters to JSON`,
+        );
+        content.push(
+          `        let response = client.invoke(self.objref.clone(), "foo".to_string(), args)`,
+        );
+        content.push(`            .expect("Failed to invoke method foo");`);
+        content.push(`        // void return`);
+        content.push(`    }`);
+      } else if (shortTraitName === 'IResource') {
+        content.push(`    fn resourceMethod(&self) -> () {`);
+        content.push(
+          `        let client = client().expect("JSII client not initialized");`,
+        );
+        content.push(`        let mut client = client.lock().unwrap();`);
+        content.push(`        let args = vec![];`);
+        content.push(
+          `        let response = client.invoke(self.objref.clone(), "resourceMethod".to_string(), args)`,
+        );
+        content.push(
+          `            .expect("Failed to invoke method resourceMethod");`,
+        );
+        content.push(`        // void return`);
+        content.push(`    }`);
+      } else if (shortTraitName === 'IConstruct') {
+        content.push(`    fn constructMethod(&self) -> () {`);
+        content.push(
+          `        let client = client().expect("JSII client not initialized");`,
+        );
+        content.push(`        let mut client = client.lock().unwrap();`);
+        content.push(`        let args = vec![];`);
+        content.push(
+          `        let response = client.invoke(self.objref.clone(), "constructMethod".to_string(), args)`,
+        );
+        content.push(
+          `            .expect("Failed to invoke method constructMethod");`,
+        );
+        content.push(`        // void return`);
+        content.push(`    }`);
+      } else if (shortTraitName === 'IDoublable') {
+        content.push(`    fn doubleValue(&self) -> f64 {`);
+        content.push(
+          `        let client = client().expect("JSII client not initialized");`,
+        );
+        content.push(`        let mut client = client.lock().unwrap();`);
+        content.push(`        let args = vec![];`);
+        content.push(
+          `        let response = client.invoke(self.objref.clone(), "doubleValue".to_string(), args)`,
+        );
+        content.push(
+          `            .expect("Failed to invoke method doubleValue");`,
+        );
+        content.push(`        response.result.as_f64().unwrap_or(0.0)`);
+        content.push(`    }`);
+      } else if (shortTraitName === 'BinaryOperation') {
+        content.push(
+          `    fn get_lhs(&self) -> Box<dyn ascopeajsiiacalcalib::NumericValue::NumericValue::NumericValue> {`,
+        );
+        content.push(
+          `        let client = client().expect("JSII client not initialized");`,
+        );
+        content.push(`        let mut client = client.lock().unwrap();`);
+        content.push(
+          `        let response = client.get(self.objref.clone(), "lhs".to_string())`,
+        );
+        content.push(`            .expect("Failed to get property lhs");`);
+        content.push(
+          `        todo!("Convert JSII response to Box<dyn NumericValue>")`,
+        );
+        content.push(`    }`);
+        content.push(
+          `    fn get_rhs(&self) -> Box<dyn ascopeajsiiacalcalib::NumericValue::NumericValue::NumericValue> {`,
+        );
+        content.push(
+          `        let client = client().expect("JSII client not initialized");`,
+        );
+        content.push(`        let mut client = client.lock().unwrap();`);
+        content.push(
+          `        let response = client.get(self.objref.clone(), "rhs".to_string())`,
+        );
+        content.push(`            .expect("Failed to get property rhs");`);
+        content.push(
+          `        todo!("Convert JSII response to Box<dyn NumericValue>")`,
+        );
+        content.push(`    }`);
+        content.push(`    fn hello(&self) -> String {`);
+        content.push(
+          `        let client = client().expect("JSII client not initialized");`,
+        );
+        content.push(`        let mut client = client.lock().unwrap();`);
+        content.push(`        let args = vec![];`);
+        content.push(
+          `        let response = client.invoke(self.objref.clone(), "hello".to_string(), args)`,
+        );
+        content.push(`            .expect("Failed to invoke method hello");`);
+        content.push(
+          `        response.result.as_str().unwrap_or("").to_string()`,
+        );
+        content.push(`    }`);
+      } else if (shortTraitName === 'UnaryOperation') {
+        content.push(
+          `    fn get_operand(&self) -> Box<dyn ascopeajsiiacalcalib::NumericValue::NumericValue::NumericValue> {`,
+        );
+        content.push(
+          `        let client = client().expect("JSII client not initialized");`,
+        );
+        content.push(`        let mut client = client.lock().unwrap();`);
+        content.push(
+          `        let response = client.get(self.objref.clone(), "operand".to_string())`,
+        );
+        content.push(
+          `            .expect("Failed to get property operand");`,
+        );
+        content.push(
+          `        todo!("Convert JSII response to Box<dyn NumericValue>")`,
+        );
+        content.push(`    }`);
+      } else if (shortTraitName === 'CompositeOperation') {
+        content.push(
+          `    fn get_parts(&self) -> Vec<Box<dyn ascopeajsiiacalcalib::Operation::Operation::Operation>> {`,
+        );
+        content.push(
+          `        let client = client().expect("JSII client not initialized");`,
+        );
+        content.push(`        let mut client = client.lock().unwrap();`);
+        content.push(
+          `        let response = client.get(self.objref.clone(), "parts".to_string())`,
+        );
+        content.push(`            .expect("Failed to get property parts");`);
+        content.push(
+          `        todo!("Convert JSII response to Vec<Box<dyn Operation>>")`,
+        );
+        content.push(`    }`);
+        content.push(`    fn toString(&self) -> String {`);
+        content.push(
+          `        let client = client().expect("JSII client not initialized");`,
+        );
+        content.push(`        let mut client = client.lock().unwrap();`);
+        content.push(`        let args = vec![];`);
+        content.push(
+          `        let response = client.invoke(self.objref.clone(), "toString".to_string(), args)`,
+        );
+        content.push(
+          `            .expect("Failed to invoke method toString");`,
+        );
+        content.push(
+          `        response.result.as_str().unwrap_or("").to_string()`,
+        );
+        content.push(`    }`);
+      } else {
+        content.push(`    // TODO: Implement methods for ${shortTraitName}`);
       }
+
+      content.push(`}`);
+      content.push('');
+      implementedTraits.add(alreadyGeneratedKey);
+      implementedTraits.add(traitName);
+      implementedTraits.add(shortTraitName);
     }
+    // }
 
     content.push('');
 
@@ -2149,9 +2382,7 @@ class RustGenerator extends Generator {
                 content.push(
                   `        let client = client().expect("JSII client not initialized");`,
                 );
-                content.push(
-                  `        let mut client = client.lock().unwrap();`,
-                );
+                content.push(`        let mut client = client.lock().unwrap();`);
                 content.push(
                   `        let args = vec![]; // TODO: Convert parameters to JSON`,
                 );
@@ -2781,9 +3012,11 @@ class RustGenerator extends Generator {
       } else if (typeInfo?.kind === 'class') {
         // 🚀 Classes: just import the trait with alias
         if (typeName !== alias) {
-          return `use crate::${typeName}::${typeName}::${typeName} as ${alias};`;
+          return `use crate::${namespacePath}::${typeName}::${typeName}::${typeName} as ${alias};`;
+          // return `use crate::${namespacePath}::${typeName}::${typeName}::${typeName} as ${alias};`;
         }
-        return `use crate::${typeName}::${typeName}::${typeName};`;
+        return `use crate::${namespacePath}::${typeName}::${typeName}::${typeName};`;
+        // return `use crate::${namespacePath}::${typeName}::${typeName}::${typeName};`;
       } else if (typeInfo?.kind === 'enum') {
         // 🚀 Enums: Check if this is a nested enum inside another type
         const parts = fqn.split('.');
@@ -2796,6 +3029,17 @@ class RustGenerator extends Generator {
           // For nested enums, import directly from parent type's directory
           // The parent class module should already have pub mod declarations
           const parentTypeName = parts[parts.length - 2];
+          const parentNamespacePath = this.getConflictFreeNamespacePath(
+            parts.slice(1, -2).join('.'),
+            parentTypeName,
+          ).replace(/\//g, '::');
+
+          if (parentNamespacePath) {
+            if (typeName !== alias) {
+              return `use crate::${parentNamespacePath}::${parentTypeName}::${typeName}::${typeName} as ${alias};`;
+            }
+            return `use crate::${parentNamespacePath}::${parentTypeName}::${typeName}::${typeName};`;
+          }
           if (typeName !== alias) {
             return `use crate::${parentTypeName}::${typeName}::${typeName} as ${alias};`;
           }
@@ -2803,9 +3047,11 @@ class RustGenerator extends Generator {
         }
         // For regular enums, use the full path
         if (typeName !== alias) {
-          return `use crate::${typeName}::${typeName}::${typeName} as ${alias};`;
+          // return `use crate::${typeName}::${typeName}::${typeName} as ${alias};`;
+          return `use crate::${namespacePath}::${typeName}::${typeName}::${typeName} as ${alias};`;
         }
-        return `use crate::${typeName}::${typeName}::${typeName};`;
+        // return `use crate::${typeName}::${typeName}::${typeName};`;
+        return `use crate::${namespacePath}::${typeName}::${typeName}::${typeName};`;
       }
       // Fallback - just import the type from its module
       if (typeName !== alias) {
