@@ -21,6 +21,7 @@ import * as path from 'path';
 import { Generator, Legalese } from '../generator';
 import { Target, TargetOptions } from '../target';
 import { shell as _shell } from '../util';
+import { Enum } from './go/types';
 
 export default class Rust extends Target {
   protected readonly generator: RustGenerator;
@@ -795,7 +796,7 @@ class RustGenerator extends Generator {
     content.push('');
 
     if (cls.kind === 'class') {
-      if (!cls.abstract) {
+      // if (!cls.abstract) {
         for (const supertrait of supertraits) {
           content.push(`impl ${supertrait} for ${cls.name}Impl {`);
 
@@ -806,56 +807,57 @@ class RustGenerator extends Generator {
           
           if (matchingFqn) {
             const ifaceType = this.currentAssembly?.types?.[matchingFqn];
-            if (ifaceType?.kind === TypeKind.Interface) {
+            if (ifaceType) {
               // Generate property getters/setters
-              for (const prop of ifaceType.properties ?? []) {
-                const rustType = this.toRustType(prop.type);
-                const rustName = reservedWords(prop.name);
+              if (ifaceType.kind != 'enum') {
+                for (const prop of ifaceType.properties ?? []) {
+                  const rustType = this.toRustType(prop.type);
+                  const rustName = reservedWords(prop.name);
 
-                // Getter
-                content.push(`    fn get_${rustName}(&self) -> ${rustType} {`);
-                content.push(`        todo!("Implement getter for ${prop.name}")`);
-                content.push(`    }`);
+                  // Getter
+                  content.push(`    fn get_${rustName}(&self) -> ${rustType} {`);
+                  content.push(`        todo!("Implement getter for ${prop.name}")`);
+                  content.push(`    }`);
 
-                // Setter (if mutable)
-                if (!prop.immutable) {
-                  content.push(`    fn set_${rustName}(&mut self, value: ${rustType}) {`);
-                  content.push(`        todo!("Implement setter for ${prop.name}")`);
+                  // Setter (if mutable)
+                  if (!prop.immutable) {
+                    content.push(`    fn set_${rustName}(&mut self, value: ${rustType}) {`);
+                    content.push(`        todo!("Implement setter for ${prop.name}")`);
+                    content.push(`    }`);
+                  }
+                }
+
+                // All methods
+                // Generate methods
+                for (const method of ifaceType.methods ?? []) {
+                  // Build parameter list
+                  const params = method.parameters
+                    ?.map((param) => {
+                      const rustType = this.toRustType(param.type);
+                      const rustName = reservedWords(param.name);
+                      return param.optional
+                        ? `${rustName}: Option<${rustType}>`
+                        : `${rustName}: ${rustType}`;
+                    })
+                    .join(', ') ?? '';
+
+                  const methodName = reservedWords(method.name);
+                  const returnType = method.returns
+                    ? this.toRustType(method.returns.type)
+                    : '()';
+
+                  // Generate method signature with todo body
+                  content.push(
+                    `    fn ${methodName}(&self${params ? `, ${params}` : ''}) -> ${returnType} {`,
+                  );
+                  content.push(`        todo!("Implement method ${method.name}")`);
                   content.push(`    }`);
                 }
               }
-
-              // All methods
-              // Generate methods
-              for (const method of ifaceType.methods ?? []) {
-                // Build parameter list
-                const params = method.parameters
-                  ?.map((param) => {
-                    const rustType = this.toRustType(param.type);
-                    const rustName = reservedWords(param.name);
-                    return param.optional
-                      ? `${rustName}: Option<${rustType}>`
-                      : `${rustName}: ${rustType}`;
-                  })
-                  .join(', ') ?? '';
-
-                const methodName = reservedWords(method.name);
-                const returnType = method.returns
-                  ? this.toRustType(method.returns.type)
-                  : '()';
-
-                // Generate method signature with todo body
-                content.push(
-                  `    fn ${methodName}(&self${params ? `, ${params}` : ''}) -> ${returnType} {`,
-                );
-                content.push(`        todo!("Implement method ${method.name}")`);
-                content.push(`    }`);
-              }
             }
-          }
+              }
 
           content.push('}');
-        }
       }
     }
 
@@ -931,1345 +933,1345 @@ class RustGenerator extends Generator {
       assemblyName !== 'ascopeajsiiacalcabaseaofabase' &&
       assemblyName !== 'ascopeajsiiacalcabase';
 
-    if (shouldImplementBase && !implementedTraits.has('Base')) {
-      content.push(
-        `impl ascopeajsiiacalcabase::Base::Base::Base for ${className}Impl {`,
-      );
-      content.push(`    fn typeName(&self) -> Box<dyn std::any::Any> {`);
-      content.push(`        // Delegate to JSII runtime`);
-      content.push(
-        `        let client = client().expect("JSII client not initialized");`,
-      );
-      content.push(`        let mut client = client.lock().unwrap();`);
-      content.push(`        let args = vec![];`);
-      content.push(
-        `        let response = client.invoke(self.objref.clone(), "typeName".to_string(), args)`,
-      );
-      content.push(`            .expect("Failed to invoke method typeName");`);
-      content.push(
-        `        todo!("Convert JSII response to Box<dyn std::any::Any>")`,
-      );
-      content.push(`    }`);
-      content.push(`}`);
-      implementedTraits.add('Base');
-    }
+    // if (shouldImplementBase && !implementedTraits.has('Base')) {
+    //   content.push(
+    //     `impl ascopeajsiiacalcabase::Base::Base::Base for ${className}Impl {`,
+    //   );
+    //   content.push(`    fn typeName(&self) -> Box<dyn std::any::Any> {`);
+    //   content.push(`        // Delegate to JSII runtime`);
+    //   content.push(
+    //     `        let client = client().expect("JSII client not initialized");`,
+    //   );
+    //   content.push(`        let mut client = client.lock().unwrap();`);
+    //   content.push(`        let args = vec![];`);
+    //   content.push(
+    //     `        let response = client.invoke(self.objref.clone(), "typeName".to_string(), args)`,
+    //   );
+    //   content.push(`            .expect("Failed to invoke method typeName");`);
+    //   content.push(
+    //     `        todo!("Convert JSII response to Box<dyn std::any::Any>")`,
+    //   );
+    //   content.push(`    }`);
+    //   content.push(`}`);
+    //   implementedTraits.add('Base');
+    // }
 
     // 🚀 Implement required traits that are supertraits of the main class trait
     // For example, if BinaryOperation extends Operation + IFriendly, then
     // BinaryOperationImpl needs to implement Operation and IFriendly
 
     // Check if this class's trait has supertraits and implement them
-    if (cls.interfaces || cls.base) {
-      const requiredTraits = new Set<string>();
-
-      // Collect all interface requirements
-      if (cls.interfaces) {
-        for (const iface of cls.interfaces) {
-          const ifaceName = iface.split('.').pop() ?? iface;
-          requiredTraits.add(ifaceName);
-
-          // Also check for transitive interface requirements
-          if (this.currentAssembly?.types) {
-            const ifaceType = this.currentAssembly.types[iface];
-            if (
-              ifaceType?.kind === TypeKind.Interface &&
-              ifaceType.interfaces
-            ) {
-              for (const nestedIface of ifaceType.interfaces) {
-                const nestedIfaceName =
-                  nestedIface.split('.').pop() ?? nestedIface;
-                requiredTraits.add(nestedIfaceName);
-              }
-            }
-          }
-        }
-      }
-
-      // For classes that need Operation trait (e.g., BinaryOperation, UnaryOperation, CompositeOperation)
-      const operationClasses = [
-        'BinaryOperation',
-        'UnaryOperation',
-        'CompositeOperation',
-      ];
-      if (operationClasses.includes(className)) {
-        requiredTraits.add('Operation');
-        requiredTraits.add('NumericValue'); // Operation extends NumericValue
-      }
-
-      // Implement each required trait
-      for (const traitName of requiredTraits) {
-        if (!implementedTraits.has(traitName)) {
-          content.push(`impl ${traitName} for ${className}Impl {`);
-
-          // Handle specific trait implementations
-          if (traitName === 'Operation') {
-            content.push(`    fn toString(&self) -> String {`);
-            content.push(
-              `        let client = client().expect("JSII client not initialized");`,
-            );
-            content.push(`        let mut client = client.lock().unwrap();`);
-            content.push(`        let args = vec![];`);
-            content.push(
-              `        let response = client.invoke(self.objref.clone(), "toString".to_string(), args)`,
-            );
-            content.push(
-              `            .expect("Failed to invoke method toString");`,
-            );
-            content.push(
-              `        response.result.as_str().unwrap_or("").to_string()`,
-            );
-            content.push(`    }`);
-          } else if (traitName === 'NumericValue') {
-            content.push(`    fn get_value(&self) -> f64 {`);
-            content.push(
-              `        let client = client().expect("JSII client not initialized");`,
-            );
-            content.push(`        let mut client = client.lock().unwrap();`);
-            content.push(
-              `        let response = client.get(self.objref.clone(), "value".to_string())`,
-            );
-            content.push(
-              `            .expect("Failed to get property value");`,
-            );
-            content.push(`        response.value.as_f64().unwrap_or(0.0)`);
-            content.push(`    }`);
-            content.push(`    fn toString(&self) -> String {`);
-            content.push(
-              `        let client = client().expect("JSII client not initialized");`,
-            );
-            content.push(`        let mut client = client.lock().unwrap();`);
-            content.push(`        let args = vec![];`);
-            content.push(
-              `        let response = client.invoke(self.objref.clone(), "toString".to_string(), args)`,
-            );
-            content.push(
-              `            .expect("Failed to invoke method toString");`,
-            );
-            content.push(
-              `        response.result.as_str().unwrap_or("").to_string()`,
-            );
-            content.push(`    }`);
-          } else if (traitName === 'IFriendly') {
-            content.push(`    fn hello(&self) -> String {`);
-            content.push(
-              `        let client = client().expect("JSII client not initialized");`,
-            );
-            content.push(`        let mut client = client.lock().unwrap();`);
-            content.push(`        let args = vec![];`);
-            content.push(
-              `        let response = client.invoke(self.objref.clone(), "hello".to_string(), args)`,
-            );
-            content.push(
-              `            .expect("Failed to invoke method hello");`,
-            );
-            content.push(
-              `        response.result.as_str().unwrap_or("").to_string()`,
-            );
-            content.push(`    }`);
-          } else if (this.currentAssembly?.types) {
-            // Handle interfaces defined in the assembly
-            const matchingFqn = Object.keys(this.currentAssembly.types).find(
-              (fqn) => fqn.endsWith(`.${traitName}`),
-            );
-            if (matchingFqn) {
-              const ifaceType = this.currentAssembly.types[matchingFqn];
-              if (ifaceType?.kind === TypeKind.Interface) {
-                // Implement the interface's methods and properties
-                for (const prop of ifaceType.properties ?? []) {
-                  const rustType = this.toRustType(prop.type);
-                  const rustName = reservedWords(prop.name);
-
-                  content.push(
-                    `    fn get_${rustName}(&self) -> ${rustType} {`,
-                  );
-                  content.push(
-                    `        let client = client().expect("JSII client not initialized");`,
-                  );
-                  content.push(
-                    `        let mut client = client.lock().unwrap();`,
-                  );
-                  content.push(
-                    `        let response = client.get(self.objref.clone(), "${prop.name}".to_string())`,
-                  );
-                  content.push(
-                    `            .expect("Failed to get property ${prop.name}");`,
-                  );
-
-                  // Generate proper conversion based on type
-                  if (rustType === 'String') {
-                    content.push(
-                      `        response.value.as_str().unwrap_or("").to_string()`,
-                    );
-                  } else if (rustType === 'f64') {
-                    content.push(
-                      `        response.value.as_f64().unwrap_or(0.0)`,
-                    );
-                  } else if (rustType === 'bool') {
-                    content.push(
-                      `        response.value.as_bool().unwrap_or(false)`,
-                    );
-                  } else {
-                    content.push(
-                      `        todo!("Convert JSII response to ${rustType}")`,
-                    );
-                  }
-                  content.push(`    }`);
-
-                  if (!prop.immutable) {
-                    content.push(
-                      `    fn set_${rustName}(&mut self, value: ${rustType}) {`,
-                    );
-                    content.push(
-                      `        let client = client().expect("JSII client not initialized");`,
-                    );
-                    content.push(
-                      `        let mut client = client.lock().unwrap();`,
-                    );
-
-                    // Convert value to JSON based on type
-                    if (rustType === 'String') {
-                      content.push(
-                        `        let json_value = Value::String(value);`,
-                      );
-                    } else if (rustType === 'f64') {
-                      content.push(
-                        `        let json_value = serde_json::Number::from_f64(value).map(Value::Number).unwrap_or(Value::Null);`,
-                      );
-                    } else if (rustType === 'bool') {
-                      content.push(
-                        `        let json_value = Value::Bool(value);`,
-                      );
-                    } else {
-                      content.push(
-                        `        let json_value = Value::Null; // TODO: Convert ${rustType} to JSON`,
-                      );
-                    }
-
-                    content.push(
-                      `        client.set(self.objref.clone(), "${prop.name}".to_string(), json_value)`,
-                    );
-                    content.push(
-                      `            .expect("Failed to set property ${prop.name}");`,
-                    );
-                    content.push(`    }`);
-                  }
-                }
-
-                for (const method of ifaceType.methods ?? []) {
-                  const params =
-                    method.parameters
-                      ?.map((param) => {
-                        const rustType = this.toRustType(param.type);
-                        const rustName = reservedWords(param.name);
-                        return param.optional
-                          ? `${rustName}: Option<${rustType}>`
-                          : `${rustName}: ${rustType}`;
-                      })
-                      .join(', ') ?? '';
-
-                  const methodName = reservedWords(method.name);
-                  const returnType = method.returns
-                    ? this.toRustType(method.returns.type)
-                    : '()';
-
-                  content.push(
-                    `    fn ${methodName}(&self${params ? `, ${params}` : ''}) -> ${returnType} {`,
-                  );
-                  content.push(
-                    `        let client = client().expect("JSII client not initialized");`,
-                  );
-                  content.push(
-                    `        let mut client = client.lock().unwrap();`,
-                  );
-                  content.push(
-                    `        let args = vec![]; // TODO: Convert parameters to JSON`,
-                  );
-                  content.push(
-                    `        let response = client.invoke(self.objref.clone(), "${method.name}".to_string(), args)`,
-                  );
-                  content.push(
-                    `            .expect("Failed to invoke method ${method.name}");`,
-                  );
-
-                  // Generate proper return conversion
-                  if (returnType === 'String') {
-                    content.push(
-                      `        response.result.as_str().unwrap_or("").to_string()`,
-                    );
-                  } else if (returnType === 'f64') {
-                    content.push(
-                      `        response.result.as_f64().unwrap_or(0.0)`,
-                    );
-                  } else if (returnType === 'bool') {
-                    content.push(
-                      `        response.result.as_bool().unwrap_or(false)`,
-                    );
-                  } else if (returnType === '()') {
-                    content.push(`        // void return`);
-                  } else {
-                    content.push(
-                      `        todo!("Convert JSII response to ${returnType}")`,
-                    );
-                  }
-                  content.push(`    }`);
-                }
-              }
-            }
-          }
-
-          content.push(`}`);
-          content.push('');
-          implementedTraits.add(traitName);
-        }
-      }
-    }
-
-    // 🚀 Add missing external trait implementations based on class name (only if not already implemented)
-    const externalTraitMap: Record<string, string[]> = {
-      Class3: ['IBaseInterface'],
-      Baz: ['IBaseInterface'],
-      Construct: ['IConstruct'],
-      Resource: ['IConstruct'],
-      Vpc: ['IResource', 'IConstruct'],
-      ImplementsInterfaceWithInternal: ['IInterfaceWithInternal'],
-    };
-
-    const externalTraits = externalTraitMap[className] || [];
-    for (const traitName of externalTraits) {
-      // Only implement if not already implemented to avoid conflicts
-      if (!implementedTraits.has(traitName)) {
-        content.push(`impl ${traitName} for ${className}Impl {`);
-
-        // Add method implementations for external traits with real JSII calls
-        if (traitName === 'IResource') {
-          content.push(`    fn resourceMethod(&self) -> () {`);
-          content.push(
-            `        let client = client().expect("JSII client not initialized");`,
-          );
-          content.push(`        let mut client = client.lock().unwrap();`);
-          content.push(`        let args = vec![];`);
-          content.push(
-            `        let response = client.invoke(self.objref.clone(), "resourceMethod".to_string(), args)`,
-          );
-          content.push(
-            `            .expect("Failed to invoke method resourceMethod");`,
-          );
-          content.push(`        // void return`);
-          content.push(`    }`);
-        } else if (traitName === 'IConstruct') {
-          content.push(`    fn constructMethod(&self) -> () {`);
-          content.push(
-            `        let client = client().expect("JSII client not initialized");`,
-          );
-          content.push(`        let mut client = client.lock().unwrap();`);
-          content.push(`        let args = vec![];`);
-          content.push(
-            `        let response = client.invoke(self.objref.clone(), "constructMethod".to_string(), args)`,
-          );
-          content.push(
-            `            .expect("Failed to invoke method constructMethod");`,
-          );
-          content.push(`        // void return`);
-          content.push(`    }`);
-        } else if (traitName === 'IInterfaceWithInternal') {
-          content.push(`    fn visible(&self) -> () {`);
-          content.push(
-            `        let client = client().expect("JSII client not initialized");`,
-          );
-          content.push(`        let mut client = client.lock().unwrap();`);
-          content.push(`        let args = vec![];`);
-          content.push(
-            `        let response = client.invoke(self.objref.clone(), "visible".to_string(), args)`,
-          );
-          content.push(
-            `            .expect("Failed to invoke method visible");`,
-          );
-          content.push(`        // void return`);
-          content.push(`    }`);
-        } else if (traitName === 'IBaseInterface') {
-          content.push(`    fn bar(&self) -> () {`);
-          content.push(
-            `        let client = client().expect("JSII client not initialized");`,
-          );
-          content.push(`        let mut client = client.lock().unwrap();`);
-          content.push(`        let args = vec![];`);
-          content.push(
-            `        client.invoke(self.objref.clone(), "bar".to_string(), args)`,
-          );
-          content.push(`            .expect("Failed to invoke method bar");`);
-          content.push(`    }`);
-        } else if (this.currentAssembly?.types) {
-          // Handle interfaces defined in the assembly
-          const matchingFqn = Object.keys(this.currentAssembly.types).find(
-            (fqn) => fqn.endsWith(`.${traitName}`),
-          );
-          if (matchingFqn) {
-            const ifaceType = this.currentAssembly.types[matchingFqn];
-            if (ifaceType?.kind === TypeKind.Interface) {
-              // Implement the interface's methods and properties with real JSII calls
-              for (const prop of ifaceType.properties ?? []) {
-                const rustType = this.toRustType(prop.type);
-                const rustName = reservedWords(prop.name);
-
-                content.push(`    fn get_${rustName}(&self) -> ${rustType} {`);
-                content.push(
-                  `        let client = client().expect("JSII client not initialized");`,
-                );
-                content.push(
-                  `        let mut client = client.lock().unwrap();`,
-                );
-                content.push(
-                  `        let response = client.get(self.objref.clone(), "${prop.name}".to_string())`,
-                );
-                content.push(
-                  `            .expect("Failed to get property ${prop.name}");`,
-                );
-
-                if (rustType === 'String') {
-                  content.push(
-                    `        response.value.as_str().unwrap_or("").to_string()`,
-                  );
-                } else if (rustType === 'f64') {
-                  content.push(
-                    `        response.value.as_f64().unwrap_or(0.0)`,
-                  );
-                } else if (rustType === 'bool') {
-                  content.push(
-                    `        response.value.as_bool().unwrap_or(false)`,
-                  );
-                } else {
-                  content.push(
-                    `        todo!("Convert JSII response to ${rustType}")`,
-                  );
-                }
-                content.push(`    }`);
-
-                if (!prop.immutable) {
-                  content.push(
-                    `    fn set_${rustName}(&mut self, value: ${rustType}) {`,
-                  );
-                  content.push(
-                    `        let client = client().expect("JSII client not initialized");`,
-                  );
-                  content.push(
-                    `        let mut client = client.lock().unwrap();`,
-                  );
-
-                  if (rustType === 'String') {
-                    content.push(
-                      `        let json_value = Value::String(value);`,
-                    );
-                  } else if (rustType === 'f64') {
-                    content.push(
-                      `        let json_value = serde_json::Number::from_f64(value).map(Value::Number).unwrap_or(Value::Null);`,
-                    );
-                  } else if (rustType === 'bool') {
-                    content.push(
-                      `        let json_value = Value::Bool(value);`,
-                    );
-                  } else {
-                    content.push(
-                      `        let json_value = Value::Null; // TODO: Convert ${rustType} to JSON`,
-                    );
-                  }
-
-                  content.push(
-                    `        client.set(self.objref.clone(), "${prop.name}".to_string(), json_value)`,
-                  );
-                  content.push(
-                    `            .expect("Failed to set property ${prop.name}");`,
-                  );
-                  content.push(`    }`);
-                }
-              }
-
-              for (const method of ifaceType.methods ?? []) {
-                const params =
-                  method.parameters
-                    ?.map((param) => {
-                      const rustType = this.toRustType(param.type);
-                      const rustName = reservedWords(param.name);
-                      return param.optional
-                        ? `${rustName}: Option<${rustType}>`
-                        : `${rustName}: ${rustType}`;
-                    })
-                    .join(', ') ?? '';
-
-                const methodName = reservedWords(method.name);
-                const returnType = method.returns
-                  ? this.toRustType(method.returns.type)
-                  : '()';
-
-                content.push(
-                  `    fn ${methodName}(&self${params ? `, ${params}` : ''}) -> ${returnType} {`,
-                );
-                content.push(
-                  `        let client = client().expect("JSII client not initialized");`,
-                );
-                content.push(
-                  `        let mut client = client.lock().unwrap();`,
-                );
-                content.push(
-                  `        let args = vec![]; // TODO: Convert parameters to JSON`,
-                );
-                content.push(
-                  `        let response = client.invoke(self.objref.clone(), "${method.name}".to_string(), args)`,
-                );
-                content.push(
-                  `            .expect("Failed to invoke method ${method.name}");`,
-                );
-
-                if (returnType === 'String') {
-                  content.push(
-                    `        response.result.as_str().unwrap_or("").to_string()`,
-                  );
-                } else if (returnType === 'f64') {
-                  content.push(
-                    `        response.result.as_f64().unwrap_or(0.0)`,
-                  );
-                } else if (returnType === 'bool') {
-                  content.push(
-                    `        response.result.as_bool().unwrap_or(false)`,
-                  );
-                } else if (returnType === '()') {
-                  content.push(`        // void return`);
-                } else {
-                  content.push(
-                    `        todo!("Convert JSII response to ${returnType}")`,
-                  );
-                }
-                content.push(`    }`);
-              }
-            }
-          }
-        }
-
-        content.push(`}`);
-        content.push('');
-        implementedTraits.add(traitName);
-      }
-    }
-
-    // 🔧 Early removal of traits for manual implementation in @scope/jsii-calc-lib
-    const currentAssemblyName =
-      (this.currentAssembly as any)?.originalName ?? 'unknown';
-    if (currentAssemblyName === '@scope/jsii-calc-lib') {
-      if (className === 'Number') {
-        // Remove NumericValue from implementedTraits to prevent automatic generation (IDoublable is handled automatically)
-        implementedTraits.delete('NumericValue');
-        implementedTraits.delete('@scope/jsii-calc-lib.NumericValue');
-      } else if (className === 'Operation') {
-        // Remove NumericValue to prevent automatic generation
-        implementedTraits.delete('NumericValue');
-        implementedTraits.delete('@scope/jsii-calc-lib.NumericValue');
-      }
-    }
-
-    content.push('');
-
-    // 🚀 Add missing supertrait implementations based on trait hierarchy
-
-    const supertraitMappings: Record<string, string[]> = {
-      // Classes that implement BinaryOperation need Operation + IFriendly + NumericValue
-      Add: [
-        'ascopeajsiiacalcalib::Operation::Operation::Operation',
-        'ascopeajsiiacalcalib::IFriendly::IFriendly::IFriendly',
-        'ascopeajsiiacalcalib::NumericValue::NumericValue::NumericValue',
-      ],
-      Multiply: [
-        'ascopeajsiiacalcalib::Operation::Operation::Operation',
-        'ascopeajsiiacalcalib::IFriendly::IFriendly::IFriendly',
-        'ascopeajsiiacalcalib::NumericValue::NumericValue::NumericValue',
-      ],
-
-      // Classes that implement UnaryOperation need Operation + IFriendly + NumericValue
-      Negate: [
-        'ascopeajsiiacalcalib::Operation::Operation::Operation',
-        'ascopeajsiiacalcalib::IFriendly::IFriendly::IFriendly',
-        'ascopeajsiiacalcalib::NumericValue::NumericValue::NumericValue',
-      ],
-
-      // Classes that implement CompositeOperation need Operation + NumericValue
-      Calculator: [
-        'ascopeajsiiacalcalib::Operation::Operation::Operation',
-        'ascopeajsiiacalcalib::NumericValue::NumericValue::NumericValue',
-      ],
-      Power: [
-        'ascopeajsiiacalcalib::Operation::Operation::Operation',
-        'ascopeajsiiacalcalib::NumericValue::NumericValue::NumericValue',
-      ],
-      Sum: [
-        'ascopeajsiiacalcalib::Operation::Operation::Operation',
-        'ascopeajsiiacalcalib::NumericValue::NumericValue::NumericValue',
-      ],
-
-      // CompositeOperation itself needs Operation + NumericValue
-      CompositeOperation: [
-        'ascopeajsiiacalcalib::Operation::Operation::Operation',
-        'ascopeajsiiacalcalib::NumericValue::NumericValue::NumericValue',
-      ],
-
-      // Base class implementations
-      'module2700::Derived': ['module2700::Base::Base::Base'],
-
-      // External interface implementations
-      ImplementsInterfaceWithInternalSubclass: ['IInterfaceWithInternal'],
-      UpcasingReflectable: [
-        'ascopeajsiiacalcalib::submodule::IReflectable::IReflectable::IReflectable',
-      ],
-      Baz: [
-        'ascopeajsiiacalcabase::IBaseInterface::IBaseInterface::IBaseInterface',
-      ],
-      Class3: [
-        'ascopeajsiiacalcabase::IBaseInterface::IBaseInterface::IBaseInterface',
-      ],
-
-      // Module2702 hierarchy
-      Vpc: [
-        'module2702::IResource::IResource::IResource',
-        'module2702::Construct::Construct::Construct',
-        'module2702::IConstruct::IConstruct::IConstruct',
-      ],
-      Resource: [
-        'module2702::IConstruct::IConstruct::IConstruct',
-        'module2702::Construct::Construct::Construct',
-      ],
-      Construct: ['module2702::IConstruct::IConstruct::IConstruct'],
-
-      // Remove dependency crate fixes since they're handled manually in the fix block below
-    };
-
-    const missingTraits = supertraitMappings[className] ?? [];
-    for (const traitName of missingTraits) {
-      const shortTraitName = traitName.split('::').pop() ?? traitName;
-      // Check both full and short trait names to avoid duplicates
-      if (
-        !implementedTraits.has(traitName) &&
-        !implementedTraits.has(shortTraitName)
-      ) {
-        const shortTraitName = traitName.split('::').pop() ?? traitName;
-        content.push(`impl ${traitName} for ${className}Impl {`);
-
-        // Add specific method implementations based on trait type
-        if (shortTraitName === 'Operation') {
-          content.push(`    fn toString(&self) -> String {`);
-          content.push(
-            `        let client = client().expect("JSII client not initialized");`,
-          );
-          content.push(`        let mut client = client.lock().unwrap();`);
-          content.push(`        let args = vec![];`);
-          content.push(
-            `        let response = client.invoke(self.objref.clone(), "toString".to_string(), args)`,
-          );
-          content.push(
-            `            .expect("Failed to invoke method toString");`,
-          );
-          content.push(
-            `        response.result.as_str().unwrap_or("").to_string()`,
-          );
-          content.push(`    }`);
-        } else if (shortTraitName === 'IFriendly') {
-          content.push(`    fn hello(&self) -> String {`);
-          content.push(
-            `        let client = client().expect("JSII client not initialized");`,
-          );
-          content.push(`        let mut client = client.lock().unwrap();`);
-          content.push(`        let args = vec![];`);
-          content.push(
-            `        let response = client.invoke(self.objref.clone(), "hello".to_string(), args)`,
-          );
-          content.push(`            .expect("Failed to invoke method hello");`);
-          content.push(
-            `        response.result.as_str().unwrap_or("").to_string()`,
-          );
-          content.push(`    }`);
-        } else if (shortTraitName === 'NumericValue') {
-          content.push(`    fn get_value(&self) -> f64 {`);
-          content.push(
-            `        let client = client().expect("JSII client not initialized");`,
-          );
-          content.push(`        let mut client = client.lock().unwrap();`);
-          content.push(
-            `        let response = client.get(self.objref.clone(), "value".to_string())`,
-          );
-          content.push(`            .expect("Failed to get property value");`);
-          content.push(`        response.value.as_f64().unwrap_or(0.0)`);
-          content.push(`    }`);
-          content.push(`    fn toString(&self) -> String {`);
-          content.push(
-            `        let client = client().expect("JSII client not initialized");`,
-          );
-          content.push(`        let mut client = client.lock().unwrap();`);
-          content.push(`        let args = vec![];`);
-          content.push(
-            `        let response = client.invoke(self.objref.clone(), "toString".to_string(), args)`,
-          );
-          content.push(
-            `            .expect("Failed to invoke method toString");`,
-          );
-          content.push(
-            `        response.result.as_str().unwrap_or("").to_string()`,
-          );
-          content.push(`    }`);
-        } else if (shortTraitName === 'Base') {
-          // Handle different Base traits
-          if (traitName.includes('module2700')) {
-            content.push(`    // Base trait methods would be implemented here`);
-          } else {
-            content.push(
-              `    // External Base trait methods would be implemented here`,
-            );
-          }
-        } else if (shortTraitName === 'IInterfaceWithInternal') {
-          content.push(`    fn visible(&self) -> () {`);
-          content.push(
-            `        let client = client().expect("JSII client not initialized");`,
-          );
-          content.push(`        let mut client = client.lock().unwrap();`);
-          content.push(`        let args = vec![];`);
-          content.push(
-            `        let response = client.invoke(self.objref.clone(), "visible".to_string(), args)`,
-          );
-          content.push(
-            `            .expect("Failed to invoke method visible");`,
-          );
-          content.push(`        // void return`);
-          content.push(`    }`);
-        } else if (shortTraitName === 'IReflectable') {
-          content.push(
-            `    fn get_entries(&self) -> Vec<Box<(dyn ascopeajsiiacalcalib::submodule::ReflectableEntry::ReflectableEntry::ReflectableEntry + 'static)>> {`,
-          );
-          content.push(
-            `        let client = client().expect("JSII client not initialized");`,
-          );
-          content.push(`        let mut client = client.lock().unwrap();`);
-          content.push(`        let args = vec![];`);
-          content.push(
-            `        let response = client.invoke(self.objref.clone(), "entries".to_string(), args)`,
-          );
-          content.push(
-            `            .expect("Failed to invoke method entries");`,
-          );
-          content.push(
-            `        todo!("Convert JSII response to Vec<Box<dyn ReflectableEntry>>")`,
-          );
-          content.push(`    }`);
-        } else if (shortTraitName === 'IBaseInterface') {
-          content.push(`    fn bar(&self) -> () {`);
-          content.push(
-            `        let client = client().expect("JSII client not initialized");`,
-          );
-          content.push(`        let mut client = client.lock().unwrap();`);
-          content.push(`        let args = vec![];`);
-          content.push(
-            `        client.invoke(self.objref.clone(), "bar".to_string(), args)`,
-          );
-          content.push(`            .expect("Failed to invoke method bar");`);
-          content.push(`    }`);
-          content.push(
-            `    fn foo(&self, _: Box<(dyn ascopeajsiiacalcabase::IBaseInterface::IBaseInterface::IBaseInterface + 'static)>) {`,
-          );
-          content.push(
-            `        let client = client().expect("JSII client not initialized");`,
-          );
-          content.push(`        let mut client = client.lock().unwrap();`);
-          content.push(
-            `        let args = vec![]; // TODO: Convert parameters to JSON`,
-          );
-          content.push(
-            `        let response = client.invoke(self.objref.clone(), "foo".to_string(), args)`,
-          );
-          content.push(`            .expect("Failed to invoke method foo");`);
-          content.push(`        // void return`);
-          content.push(`    }`);
-        } else if (shortTraitName === 'IResource') {
-          content.push(`    fn resourceMethod(&self) -> () {`);
-          content.push(
-            `        let client = client().expect("JSII client not initialized");`,
-          );
-          content.push(`        let mut client = client.lock().unwrap();`);
-          content.push(`        let args = vec![];`);
-          content.push(
-            `        let response = client.invoke(self.objref.clone(), "resourceMethod".to_string(), args)`,
-          );
-          content.push(
-            `            .expect("Failed to invoke method resourceMethod");`,
-          );
-          content.push(`        // void return`);
-          content.push(`    }`);
-        } else if (shortTraitName === 'IConstruct') {
-          content.push(`    fn constructMethod(&self) -> () {`);
-          content.push(
-            `        let client = client().expect("JSII client not initialized");`,
-          );
-          content.push(`        let mut client = client.lock().unwrap();`);
-          content.push(`        let args = vec![];`);
-          content.push(
-            `        let response = client.invoke(self.objref.clone(), "constructMethod".to_string(), args)`,
-          );
-          content.push(
-            `            .expect("Failed to invoke method constructMethod");`,
-          );
-          content.push(`        // void return`);
-          content.push(`    }`);
-        } else if (shortTraitName === 'IDoublable') {
-          content.push(`    fn doubleValue(&self) -> f64 {`);
-          content.push(
-            `        let client = client().expect("JSII client not initialized");`,
-          );
-          content.push(`        let mut client = client.lock().unwrap();`);
-          content.push(`        let args = vec![];`);
-          content.push(
-            `        let response = client.invoke(self.objref.clone(), "doubleValue".to_string(), args)`,
-          );
-          content.push(
-            `            .expect("Failed to invoke method doubleValue");`,
-          );
-          content.push(`        response.result.as_f64().unwrap_or(0.0)`);
-          content.push(`    }`);
-        } else {
-          content.push(`    // TODO: Implement methods for ${shortTraitName}`);
-        }
-
-        content.push(`}`);
-        content.push('');
-        implementedTraits.add(traitName);
-      }
-    }
-
-    content.push('');
-
-    // 🔧 Fix specific compilation errors for dependency crates
-    if (originalAssemblyName === '@scope/jsii-calc-lib') {
-      if (className === 'Number') {
-        // Add NumericValue implementation (IDoublable is handled automatically)
-        content.push(
-          `impl crate::NumericValue::NumericValue::NumericValue for ${className}Impl {`,
-        );
-        content.push(`    fn get_value(&self) -> f64 {`);
-        content.push(
-          `        let client = client().expect("JSII client not initialized");`,
-        );
-        content.push(`        let mut client = client.lock().unwrap();`);
-        content.push(
-          `        let response = client.get(self.objref.clone(), "value".to_string())`,
-        );
-        content.push(`            .expect("Failed to get property value");`);
-        content.push(`        response.value.as_f64().unwrap_or(0.0)`);
-        content.push(`    }`);
-        content.push(`    fn toString(&self) -> String {`);
-        content.push(
-          `        let client = client().expect("JSII client not initialized");`,
-        );
-        content.push(`        let mut client = client.lock().unwrap();`);
-        content.push(`        let args = vec![];`);
-        content.push(
-          `        let response = client.invoke(self.objref.clone(), "toString".to_string(), args)`,
-        );
-        content.push(
-          `            .expect("Failed to invoke method toString");`,
-        );
-        content.push(
-          `        response.result.as_str().unwrap_or("").to_string()`,
-        );
-        content.push(`    }`);
-        content.push(`}`);
-        content.push('');
-
-        // Mark NumericValue as implemented to prevent automatic generation (IDoublable is handled automatically)
-        implementedTraits.add('NumericValue');
-        implementedTraits.add('@scope/jsii-calc-lib.NumericValue');
-      } else if (className === 'NumericValue') {
-        // NumericValueImpl needs Base implementation
-        content.push(
-          `impl ascopeajsiiacalcabase::Base::Base::Base for ${className}Impl {`,
-        );
-        content.push(`    fn typeName(&self) -> Box<dyn std::any::Any> {`);
-        content.push(
-          `        let client = client().expect("JSII client not initialized");`,
-        );
-        content.push(`        let mut client = client.lock().unwrap();`);
-        content.push(`        let args = vec![];`);
-        content.push(
-          `        let response = client.invoke(self.objref.clone(), "typeName".to_string(), args)`,
-        );
-        content.push(
-          `            .expect("Failed to invoke method typeName");`,
-        );
-        content.push(
-          `        todo!("Convert JSII response to Box<dyn std::any::Any>")`,
-        );
-        content.push(`    }`);
-        content.push(`}`);
-        content.push('');
-      } else if (className === 'Operation') {
-        // OperationImpl needs NumericValue implementation
-        content.push(
-          `impl crate::NumericValue::NumericValue::NumericValue for ${className}Impl {`,
-        );
-        content.push(`    fn get_value(&self) -> f64 {`);
-        content.push(
-          `        let client = client().expect("JSII client not initialized");`,
-        );
-        content.push(`        let mut client = client.lock().unwrap();`);
-        content.push(
-          `        let response = client.get(self.objref.clone(), "value".to_string())`,
-        );
-        content.push(`            .expect("Failed to get property value");`);
-        content.push(`        response.value.as_f64().unwrap_or(0.0)`);
-        content.push(`    }`);
-        content.push(`    fn toString(&self) -> String {`);
-        content.push(
-          `        let client = client().expect("JSII client not initialized");`,
-        );
-        content.push(`        let mut client = client.lock().unwrap();`);
-        content.push(`        let args = vec![];`);
-        content.push(
-          `        let response = client.invoke(self.objref.clone(), "toString".to_string(), args)`,
-        );
-        content.push(
-          `            .expect("Failed to invoke method toString");`,
-        );
-        content.push(
-          `        response.result.as_str().unwrap_or("").to_string()`,
-        );
-        content.push(`    }`);
-        content.push(`}`);
-        content.push('');
-
-        // Mark NumericValue as implemented to prevent automatic generation
-        implementedTraits.add('NumericValue');
-        implementedTraits.add('@scope/jsii-calc-lib.NumericValue');
-      }
-    }
-
-    content.push('');
-
-    // Implement base class traits
-    if (cls.base) {
-      const baseTypeName = cls.base.split('.').pop() ?? cls.base;
-
-      if (!implementedTraits.has(baseTypeName)) {
-        content.push(`impl ${baseTypeName} for ${className}Impl {`);
-
-        // Handle special external base classes that need specific method implementations
-        if (
-          baseTypeName === 'BaseFor2647' &&
-          className === 'ExtendAndImplement'
-        ) {
-          content.push(
-            `    fn foo(&self, _: Box<(dyn ascopeajsiiacalcabase::IBaseInterface::IBaseInterface::IBaseInterface + 'static)>) {`,
-          );
-          content.push(
-            `        let client = client().expect("JSII client not initialized");`,
-          );
-          content.push(`        let mut client = client.lock().unwrap();`);
-          content.push(
-            `        let args = vec![]; // TODO: Convert parameters to JSON`,
-          );
-          content.push(
-            `        let response = client.invoke(self.objref.clone(), "foo".to_string(), args)`,
-          );
-          content.push(`            .expect("Failed to invoke method foo");`);
-          content.push(`        // void return`);
-          content.push(`    }`);
-        } else if (this.currentAssembly?.types) {
-          const baseType = this.currentAssembly.types[cls.base];
-          if (baseType?.kind === TypeKind.Class) {
-            // Implement all methods from base class
-            for (const method of baseType.methods ?? []) {
-              const params =
-                method.parameters
-                  ?.map((param) => {
-                    const rustType = this.toRustType(param.type);
-                    const rustName = reservedWords(param.name);
-                    return param.optional
-                      ? `${rustName}: Option<${rustType}>`
-                      : `${rustName}: ${rustType}`;
-                  })
-                  .join(', ') ?? '';
-
-              const methodName = reservedWords(method.name);
-              const returnType = method.returns
-                ? this.toRustType(method.returns.type)
-                : '()';
-
-              content.push(
-                `    fn ${methodName}(&self${params ? `, ${params}` : ''}) -> ${returnType} {`,
-              );
-              content.push(
-                `        let client = client().expect("JSII client not initialized");`,
-              );
-              content.push(`        let mut client = client.lock().unwrap();`);
-              content.push(
-                `        let args = vec![]; // TODO: Convert parameters to JSON`,
-              );
-              content.push(
-                `        let response = client.invoke(self.objref.clone(), "${method.name}".to_string(), args)`,
-              );
-              content.push(
-                `            .expect("Failed to invoke method ${method.name}");`,
-              );
-
-              // Generate proper return conversion
-              if (returnType === 'String') {
-                content.push(
-                  `        response.result.as_str().unwrap_or("").to_string()`,
-                );
-              } else if (returnType === 'f64') {
-                content.push(`        response.result.as_f64().unwrap_or(0.0)`);
-              } else if (returnType === 'bool') {
-                content.push(
-                  `        response.result.as_bool().unwrap_or(false)`,
-                );
-              } else if (returnType === '()') {
-                content.push(`        // void return`);
-              } else {
-                content.push(
-                  `        todo!("Convert JSII response to ${returnType}")`,
-                );
-              }
-              content.push(`    }`);
-            }
-
-            // Implement all properties from base class
-            for (const prop of baseType.properties ?? []) {
-              const rustType = this.toRustType(prop.type);
-              const rustName = reservedWords(prop.name);
-
-              content.push(`    fn get_${rustName}(&self) -> ${rustType} {`);
-              content.push(
-                `        let client = client().expect("JSII client not initialized");`,
-              );
-              content.push(`        let mut client = client.lock().unwrap();`);
-              content.push(
-                `        let response = client.get(self.objref.clone(), "${prop.name}".to_string())`,
-              );
-              content.push(
-                `            .expect("Failed to get property ${prop.name}");`,
-              );
-
-              // Generate proper conversion based on type
-              if (rustType === 'String') {
-                content.push(
-                  `        response.value.as_str().unwrap_or("").to_string()`,
-                );
-              } else if (rustType === 'f64') {
-                content.push(`        response.value.as_f64().unwrap_or(0.0)`);
-              } else if (rustType === 'bool') {
-                content.push(
-                  `        response.value.as_bool().unwrap_or(false)`,
-                );
-              } else {
-                content.push(
-                  `        todo!("Convert JSII response to ${rustType}")`,
-                );
-              }
-              content.push(`    }`);
-
-              if (!prop.immutable) {
-                content.push(
-                  `    fn set_${rustName}(&mut self, value: ${rustType}) {`,
-                );
-                content.push(
-                  `        let client = client().expect("JSII client not initialized");`,
-                );
-                content.push(
-                  `        let mut client = client.lock().unwrap();`,
-                );
-
-                // Convert value to JSON based on type
-                if (rustType === 'String') {
-                  content.push(
-                    `        let json_value = Value::String(value);`,
-                  );
-                } else if (rustType === 'f64') {
-                  content.push(
-                    `        let json_value = serde_json::Number::from_f64(value).map(Value::Number).unwrap_or(Value::Null);`,
-                  );
-                } else if (rustType === 'bool') {
-                  content.push(`        let json_value = Value::Bool(value);`);
-                } else {
-                  content.push(
-                    `        let json_value = Value::Null; // TODO: Convert ${rustType} to JSON`,
-                  );
-                }
-
-                content.push(
-                  `        client.set(self.objref.clone(), "${prop.name}".to_string(), json_value)`,
-                );
-                content.push(
-                  `            .expect("Failed to set property ${prop.name}");`,
-                );
-                content.push(`    }`);
-              }
-            }
-          }
-        }
-
-        content.push(`}`);
-        content.push('');
-        implementedTraits.add(baseTypeName);
-      }
-    }
-
-    // Implement interface traits
-    if (cls.interfaces) {
-      for (const iface of cls.interfaces) {
-        const ifaceName = iface.split('.').pop() ?? iface;
-
-        if (!implementedTraits.has(ifaceName)) {
-          content.push(`impl ${ifaceName} for ${className}Impl {`);
-
-          // Handle special external interfaces that need specific method implementations
-          if (
-            ifaceName === 'IReflectable' &&
-            className === 'UpcasingReflectable'
-          ) {
-            content.push(
-              `    fn get_entries(&self) -> Vec<Box<(dyn ascopeajsiiacalcalib::submodule::ReflectableEntry::ReflectableEntry::ReflectableEntry + 'static)>> {`,
-            );
-            content.push(
-              `        let client = client().expect("JSII client not initialized");`,
-            );
-            content.push(`        let mut client = client.lock().unwrap();`);
-            content.push(`        let args = vec![];`);
-            content.push(
-              `        let response = client.invoke(self.objref.clone(), "entries".to_string(), args)`,
-            );
-            content.push(
-              `            .expect("Failed to invoke method entries");`,
-            );
-            content.push(
-              `        todo!("Convert JSII response to Vec<Box<dyn ReflectableEntry>>")`,
-            );
-            content.push(`    }`);
-          } else if (this.currentAssembly?.types) {
-            const ifaceType = this.currentAssembly.types[iface];
-            if (ifaceType?.kind === TypeKind.Interface) {
-              // Implement properties as getter/setter methods
-              for (const prop of ifaceType.properties ?? []) {
-                const rustType = this.toRustType(prop.type);
-                const rustName = reservedWords(prop.name);
-
-                content.push(`    fn get_${rustName}(&self) -> ${rustType} {`);
-                content.push(
-                  `        let client = client().expect("JSII client not initialized");`,
-                );
-                content.push(
-                  `        let mut client = client.lock().unwrap();`,
-                );
-                content.push(
-                  `        let response = client.get(self.objref.clone(), "${prop.name}".to_string())`,
-                );
-                content.push(
-                  `            .expect("Failed to get property ${prop.name}");`,
-                );
-
-                // Generate proper conversion based on type
-                if (rustType === 'String') {
-                  content.push(
-                    `        response.value.as_str().unwrap_or("").to_string()`,
-                  );
-                } else if (rustType === 'f64') {
-                  content.push(
-                    `        response.value.as_f64().unwrap_or(0.0)`,
-                  );
-                } else if (rustType === 'bool') {
-                  content.push(
-                    `        response.value.as_bool().unwrap_or(false)`,
-                  );
-                } else {
-                  content.push(
-                    `        todo!("Convert JSII response to ${rustType}")`,
-                  );
-                }
-                content.push(`    }`);
-
-                if (!prop.immutable) {
-                  content.push(
-                    `    fn set_${rustName}(&mut self, value: ${rustType}) {`,
-                  );
-                  content.push(
-                    `        let client = client().expect("JSII client not initialized");`,
-                  );
-                  content.push(
-                    `        let mut client = client.lock().unwrap();`,
-                  );
-
-                  // Convert value to JSON based on type
-                  if (rustType === 'String') {
-                    content.push(
-                      `        let json_value = Value::String(value);`,
-                    );
-                  } else if (rustType === 'f64') {
-                    content.push(
-                      `        let json_value = serde_json::Number::from_f64(value).map(Value::Number).unwrap_or(Value::Null);`,
-                    );
-                  } else if (rustType === 'bool') {
-                    content.push(
-                      `        let json_value = Value::Bool(value);`,
-                    );
-                  } else {
-                    content.push(
-                      `        let json_value = Value::Null; // TODO: Convert ${rustType} to JSON`,
-                    );
-                  }
-
-                  content.push(
-                    `        client.set(self.objref.clone(), "${prop.name}".to_string(), json_value)`,
-                  );
-                  content.push(
-                    `            .expect("Failed to set property ${prop.name}");`,
-                  );
-                  content.push(`    }`);
-                }
-              }
-
-              // Implement methods
-              for (const method of ifaceType.methods ?? []) {
-                const params =
-                  method.parameters
-                    ?.map((param) => {
-                      const rustType = this.toRustType(param.type);
-                      const rustName = reservedWords(param.name);
-                      return param.optional
-                        ? `${rustName}: Option<${rustType}>`
-                        : `${rustName}: ${rustType}`;
-                    })
-                    .join(', ') ?? '';
-
-                const methodName = reservedWords(method.name);
-                const returnType = method.returns
-                  ? this.toRustType(method.returns.type)
-                  : '()';
-
-                content.push(
-                  `    fn ${methodName}(&self${params ? `, ${params}` : ''}) -> ${returnType} {`,
-                );
-                content.push(
-                  `        let client = client().expect("JSII client not initialized");`,
-                );
-                content.push(
-                  `        let mut client = client.lock().unwrap();`,
-                );
-                content.push(
-                  `        let args = vec![]; // TODO: Convert parameters to JSON`,
-                );
-                content.push(
-                  `        let response = client.invoke(self.objref.clone(), "${method.name}".to_string(), args)`,
-                );
-                content.push(
-                  `            .expect("Failed to invoke method ${method.name}");`,
-                );
-
-                // Generate proper return conversion
-                if (returnType === 'String') {
-                  content.push(
-                    `        response.result.as_str().unwrap_or("").to_string()`,
-                  );
-                } else if (returnType === 'f64') {
-                  content.push(
-                    `        response.result.as_f64().unwrap_or(0.0)`,
-                  );
-                } else if (returnType === 'bool') {
-                  content.push(
-                    `        response.result.as_bool().unwrap_or(false)`,
-                  );
-                } else if (returnType === '()') {
-                  content.push(`        // void return`);
-                } else {
-                  content.push(
-                    `        todo!("Convert JSII response to ${returnType}")`,
-                  );
-                }
-                content.push(`    }`);
-              }
-            }
-          }
-
-          content.push(`}`);
-          content.push('');
-          implementedTraits.add(ifaceName);
-        }
-      }
-    }
-
-    // Add missing Base trait implementations for module2700::Derived
-    if (cls.namespace === 'module2700' && className === 'Derived') {
-      if (cls.base && cls.base.endsWith('.Base')) {
-        const baseTypeName = 'Base'; // Local Base trait
-        if (!implementedTraits.has(baseTypeName)) {
-          content.push(`impl ${baseTypeName} for ${className}Impl {`);
-          // Find the base type definition and implement its methods
-          if (this.currentAssembly?.types) {
-            const baseType = this.currentAssembly.types[cls.base];
-            if (baseType?.kind === TypeKind.Class) {
-              for (const method of baseType.methods ?? []) {
-                const params =
-                  method.parameters
-                    ?.map((param) => {
-                      const rustType = this.toRustType(param.type);
-                      const rustName = reservedWords(param.name);
-                      return param.optional
-                        ? `${rustName}: Option<${rustType}>`
-                        : `${rustName}: ${rustType}`;
-                    })
-                    .join(', ') ?? '';
-
-                const methodName = reservedWords(method.name);
-                const returnType = method.returns
-                  ? this.toRustType(method.returns.type)
-                  : '()';
-
-                content.push(
-                  `    fn ${methodName}(&self${params ? `, ${params}` : ''}) -> ${returnType} {`,
-                );
-                content.push(
-                  `        let client = client().expect("JSII client not initialized");`,
-                );
-                content.push(
-                  `        let mut client = client.lock().unwrap();`,
-                );
-                content.push(
-                  `        let args = vec![]; // TODO: Convert parameters to JSON`,
-                );
-                content.push(
-                  `        let response = client.invoke(self.objref.clone(), "${method.name}".to_string(), args)`,
-                );
-                content.push(
-                  `            .expect("Failed to invoke method ${method.name}");`,
-                );
-
-                if (returnType === 'String') {
-                  content.push(
-                    `        response.result.as_str().unwrap_or("").to_string()`,
-                  );
-                } else if (returnType === 'f64') {
-                  content.push(
-                    `        response.result.as_f64().unwrap_or(0.0)`,
-                  );
-                } else if (returnType === 'bool') {
-                  content.push(
-                    `        response.result.as_bool().unwrap_or(false)`,
-                  );
-                } else if (returnType === '()') {
-                  content.push(`        // void return`);
-                } else {
-                  content.push(
-                    `        todo!("Convert JSII response to ${returnType}")`,
-                  );
-                }
-                content.push(`    }`);
-              }
-            }
-          }
-          content.push(`}`);
-          content.push('');
-          implementedTraits.add(baseTypeName);
-        }
-      }
-    }
+    // if (cls.interfaces || cls.base) {
+    //   const requiredTraits = new Set<string>();
+
+    //   // Collect all interface requirements
+    //   if (cls.interfaces) {
+    //     for (const iface of cls.interfaces) {
+    //       const ifaceName = iface.split('.').pop() ?? iface;
+    //       requiredTraits.add(ifaceName);
+
+    //       // Also check for transitive interface requirements
+    //       if (this.currentAssembly?.types) {
+    //         const ifaceType = this.currentAssembly.types[iface];
+    //         if (
+    //           ifaceType?.kind === TypeKind.Interface &&
+    //           ifaceType.interfaces
+    //         ) {
+    //           for (const nestedIface of ifaceType.interfaces) {
+    //             const nestedIfaceName =
+    //               nestedIface.split('.').pop() ?? nestedIface;
+    //             requiredTraits.add(nestedIfaceName);
+    //           }
+    //         }
+    //       }
+    //     }
+    //   }
+
+    //   // For classes that need Operation trait (e.g., BinaryOperation, UnaryOperation, CompositeOperation)
+    //   const operationClasses = [
+    //     'BinaryOperation',
+    //     'UnaryOperation',
+    //     'CompositeOperation',
+    //   ];
+    //   if (operationClasses.includes(className)) {
+    //     requiredTraits.add('Operation');
+    //     requiredTraits.add('NumericValue'); // Operation extends NumericValue
+    //   }
+
+    //   // Implement each required trait
+    //   for (const traitName of requiredTraits) {
+    //     if (!implementedTraits.has(traitName)) {
+    //       content.push(`impl ${traitName} for ${className}Impl {`);
+
+    //       // Handle specific trait implementations
+    //       if (traitName === 'Operation') {
+    //         content.push(`    fn toString(&self) -> String {`);
+    //         content.push(
+    //           `        let client = client().expect("JSII client not initialized");`,
+    //         );
+    //         content.push(`        let mut client = client.lock().unwrap();`);
+    //         content.push(`        let args = vec![];`);
+    //         content.push(
+    //           `        let response = client.invoke(self.objref.clone(), "toString".to_string(), args)`,
+    //         );
+    //         content.push(
+    //           `            .expect("Failed to invoke method toString");`,
+    //         );
+    //         content.push(
+    //           `        response.result.as_str().unwrap_or("").to_string()`,
+    //         );
+    //         content.push(`    }`);
+    //       } else if (traitName === 'NumericValue') {
+    //         content.push(`    fn get_value(&self) -> f64 {`);
+    //         content.push(
+    //           `        let client = client().expect("JSII client not initialized");`,
+    //         );
+    //         content.push(`        let mut client = client.lock().unwrap();`);
+    //         content.push(
+    //           `        let response = client.get(self.objref.clone(), "value".to_string())`,
+    //         );
+    //         content.push(
+    //           `            .expect("Failed to get property value");`,
+    //         );
+    //         content.push(`        response.value.as_f64().unwrap_or(0.0)`);
+    //         content.push(`    }`);
+    //         content.push(`    fn toString(&self) -> String {`);
+    //         content.push(
+    //           `        let client = client().expect("JSII client not initialized");`,
+    //         );
+    //         content.push(`        let mut client = client.lock().unwrap();`);
+    //         content.push(`        let args = vec![];`);
+    //         content.push(
+    //           `        let response = client.invoke(self.objref.clone(), "toString".to_string(), args)`,
+    //         );
+    //         content.push(
+    //           `            .expect("Failed to invoke method toString");`,
+    //         );
+    //         content.push(
+    //           `        response.result.as_str().unwrap_or("").to_string()`,
+    //         );
+    //         content.push(`    }`);
+    //       } else if (traitName === 'IFriendly') {
+    //         content.push(`    fn hello(&self) -> String {`);
+    //         content.push(
+    //           `        let client = client().expect("JSII client not initialized");`,
+    //         );
+    //         content.push(`        let mut client = client.lock().unwrap();`);
+    //         content.push(`        let args = vec![];`);
+    //         content.push(
+    //           `        let response = client.invoke(self.objref.clone(), "hello".to_string(), args)`,
+    //         );
+    //         content.push(
+    //           `            .expect("Failed to invoke method hello");`,
+    //         );
+    //         content.push(
+    //           `        response.result.as_str().unwrap_or("").to_string()`,
+    //         );
+    //         content.push(`    }`);
+    //       } else if (this.currentAssembly?.types) {
+    //         // Handle interfaces defined in the assembly
+    //         const matchingFqn = Object.keys(this.currentAssembly.types).find(
+    //           (fqn) => fqn.endsWith(`.${traitName}`),
+    //         );
+    //         if (matchingFqn) {
+    //           const ifaceType = this.currentAssembly.types[matchingFqn];
+    //           if (ifaceType?.kind === TypeKind.Interface) {
+    //             // Implement the interface's methods and properties
+    //             for (const prop of ifaceType.properties ?? []) {
+    //               const rustType = this.toRustType(prop.type);
+    //               const rustName = reservedWords(prop.name);
+
+    //               content.push(
+    //                 `    fn get_${rustName}(&self) -> ${rustType} {`,
+    //               );
+    //               content.push(
+    //                 `        let client = client().expect("JSII client not initialized");`,
+    //               );
+    //               content.push(
+    //                 `        let mut client = client.lock().unwrap();`,
+    //               );
+    //               content.push(
+    //                 `        let response = client.get(self.objref.clone(), "${prop.name}".to_string())`,
+    //               );
+    //               content.push(
+    //                 `            .expect("Failed to get property ${prop.name}");`,
+    //               );
+
+    //               // Generate proper conversion based on type
+    //               if (rustType === 'String') {
+    //                 content.push(
+    //                   `        response.value.as_str().unwrap_or("").to_string()`,
+    //                 );
+    //               } else if (rustType === 'f64') {
+    //                 content.push(
+    //                   `        response.value.as_f64().unwrap_or(0.0)`,
+    //                 );
+    //               } else if (rustType === 'bool') {
+    //                 content.push(
+    //                   `        response.value.as_bool().unwrap_or(false)`,
+    //                 );
+    //               } else {
+    //                 content.push(
+    //                   `        todo!("Convert JSII response to ${rustType}")`,
+    //                 );
+    //               }
+    //               content.push(`    }`);
+
+    //               if (!prop.immutable) {
+    //                 content.push(
+    //                   `    fn set_${rustName}(&mut self, value: ${rustType}) {`,
+    //                 );
+    //                 content.push(
+    //                   `        let client = client().expect("JSII client not initialized");`,
+    //                 );
+    //                 content.push(
+    //                   `        let mut client = client.lock().unwrap();`,
+    //                 );
+
+    //                 // Convert value to JSON based on type
+    //                 if (rustType === 'String') {
+    //                   content.push(
+    //                     `        let json_value = Value::String(value);`,
+    //                   );
+    //                 } else if (rustType === 'f64') {
+    //                   content.push(
+    //                     `        let json_value = serde_json::Number::from_f64(value).map(Value::Number).unwrap_or(Value::Null);`,
+    //                   );
+    //                 } else if (rustType === 'bool') {
+    //                   content.push(
+    //                     `        let json_value = Value::Bool(value);`,
+    //                   );
+    //                 } else {
+    //                   content.push(
+    //                     `        let json_value = Value::Null; // TODO: Convert ${rustType} to JSON`,
+    //                   );
+    //                 }
+
+    //                 content.push(
+    //                   `        client.set(self.objref.clone(), "${prop.name}".to_string(), json_value)`,
+    //                 );
+    //                 content.push(
+    //                   `            .expect("Failed to set property ${prop.name}");`,
+    //                 );
+    //                 content.push(`    }`);
+    //               }
+    //             }
+
+    //             for (const method of ifaceType.methods ?? []) {
+    //               const params =
+    //                 method.parameters
+    //                   ?.map((param) => {
+    //                     const rustType = this.toRustType(param.type);
+    //                     const rustName = reservedWords(param.name);
+    //                     return param.optional
+    //                       ? `${rustName}: Option<${rustType}>`
+    //                       : `${rustName}: ${rustType}`;
+    //                   })
+    //                   .join(', ') ?? '';
+
+    //               const methodName = reservedWords(method.name);
+    //               const returnType = method.returns
+    //                 ? this.toRustType(method.returns.type)
+    //                 : '()';
+
+    //               content.push(
+    //                 `    fn ${methodName}(&self${params ? `, ${params}` : ''}) -> ${returnType} {`,
+    //               );
+    //               content.push(
+    //                 `        let client = client().expect("JSII client not initialized");`,
+    //               );
+    //               content.push(
+    //                 `        let mut client = client.lock().unwrap();`,
+    //               );
+    //               content.push(
+    //                 `        let args = vec![]; // TODO: Convert parameters to JSON`,
+    //               );
+    //               content.push(
+    //                 `        let response = client.invoke(self.objref.clone(), "${method.name}".to_string(), args)`,
+    //               );
+    //               content.push(
+    //                 `            .expect("Failed to invoke method ${method.name}");`,
+    //               );
+
+    //               // Generate proper return conversion
+    //               if (returnType === 'String') {
+    //                 content.push(
+    //                   `        response.result.as_str().unwrap_or("").to_string()`,
+    //                 );
+    //               } else if (returnType === 'f64') {
+    //                 content.push(
+    //                   `        response.result.as_f64().unwrap_or(0.0)`,
+    //                 );
+    //               } else if (returnType === 'bool') {
+    //                 content.push(
+    //                   `        response.result.as_bool().unwrap_or(false)`,
+    //                 );
+    //               } else if (returnType === '()') {
+    //                 content.push(`        // void return`);
+    //               } else {
+    //                 content.push(
+    //                   `        todo!("Convert JSII response to ${returnType}")`,
+    //                 );
+    //               }
+    //               content.push(`    }`);
+    //             }
+    //           }
+    //         }
+    //       }
+
+    //       content.push(`}`);
+    //       content.push('');
+    //       implementedTraits.add(traitName);
+    //     }
+    //   }
+    // }
+
+    // // 🚀 Add missing external trait implementations based on class name (only if not already implemented)
+    // const externalTraitMap: Record<string, string[]> = {
+    //   Class3: ['IBaseInterface'],
+    //   Baz: ['IBaseInterface'],
+    //   Construct: ['IConstruct'],
+    //   Resource: ['IConstruct'],
+    //   Vpc: ['IResource', 'IConstruct'],
+    //   ImplementsInterfaceWithInternal: ['IInterfaceWithInternal'],
+    // };
+
+    // const externalTraits = externalTraitMap[className] || [];
+    // for (const traitName of externalTraits) {
+    //   // Only implement if not already implemented to avoid conflicts
+    //   if (!implementedTraits.has(traitName)) {
+    //     content.push(`impl ${traitName} for ${className}Impl {`);
+
+    //     // Add method implementations for external traits with real JSII calls
+    //     if (traitName === 'IResource') {
+    //       content.push(`    fn resourceMethod(&self) -> () {`);
+    //       content.push(
+    //         `        let client = client().expect("JSII client not initialized");`,
+    //       );
+    //       content.push(`        let mut client = client.lock().unwrap();`);
+    //       content.push(`        let args = vec![];`);
+    //       content.push(
+    //         `        let response = client.invoke(self.objref.clone(), "resourceMethod".to_string(), args)`,
+    //       );
+    //       content.push(
+    //         `            .expect("Failed to invoke method resourceMethod");`,
+    //       );
+    //       content.push(`        // void return`);
+    //       content.push(`    }`);
+    //     } else if (traitName === 'IConstruct') {
+    //       content.push(`    fn constructMethod(&self) -> () {`);
+    //       content.push(
+    //         `        let client = client().expect("JSII client not initialized");`,
+    //       );
+    //       content.push(`        let mut client = client.lock().unwrap();`);
+    //       content.push(`        let args = vec![];`);
+    //       content.push(
+    //         `        let response = client.invoke(self.objref.clone(), "constructMethod".to_string(), args)`,
+    //       );
+    //       content.push(
+    //         `            .expect("Failed to invoke method constructMethod");`,
+    //       );
+    //       content.push(`        // void return`);
+    //       content.push(`    }`);
+    //     } else if (traitName === 'IInterfaceWithInternal') {
+    //       content.push(`    fn visible(&self) -> () {`);
+    //       content.push(
+    //         `        let client = client().expect("JSII client not initialized");`,
+    //       );
+    //       content.push(`        let mut client = client.lock().unwrap();`);
+    //       content.push(`        let args = vec![];`);
+    //       content.push(
+    //         `        let response = client.invoke(self.objref.clone(), "visible".to_string(), args)`,
+    //       );
+    //       content.push(
+    //         `            .expect("Failed to invoke method visible");`,
+    //       );
+    //       content.push(`        // void return`);
+    //       content.push(`    }`);
+    //     } else if (traitName === 'IBaseInterface') {
+    //       content.push(`    fn bar(&self) -> () {`);
+    //       content.push(
+    //         `        let client = client().expect("JSII client not initialized");`,
+    //       );
+    //       content.push(`        let mut client = client.lock().unwrap();`);
+    //       content.push(`        let args = vec![];`);
+    //       content.push(
+    //         `        client.invoke(self.objref.clone(), "bar".to_string(), args)`,
+    //       );
+    //       content.push(`            .expect("Failed to invoke method bar");`);
+    //       content.push(`    }`);
+    //     } else if (this.currentAssembly?.types) {
+    //       // Handle interfaces defined in the assembly
+    //       const matchingFqn = Object.keys(this.currentAssembly.types).find(
+    //         (fqn) => fqn.endsWith(`.${traitName}`),
+    //       );
+    //       if (matchingFqn) {
+    //         const ifaceType = this.currentAssembly.types[matchingFqn];
+    //         if (ifaceType?.kind === TypeKind.Interface) {
+    //           // Implement the interface's methods and properties with real JSII calls
+    //           for (const prop of ifaceType.properties ?? []) {
+    //             const rustType = this.toRustType(prop.type);
+    //             const rustName = reservedWords(prop.name);
+
+    //             content.push(`    fn get_${rustName}(&self) -> ${rustType} {`);
+    //             content.push(
+    //               `        let client = client().expect("JSII client not initialized");`,
+    //             );
+    //             content.push(
+    //               `        let mut client = client.lock().unwrap();`,
+    //             );
+    //             content.push(
+    //               `        let response = client.get(self.objref.clone(), "${prop.name}".to_string())`,
+    //             );
+    //             content.push(
+    //               `            .expect("Failed to get property ${prop.name}");`,
+    //             );
+
+    //             if (rustType === 'String') {
+    //               content.push(
+    //                 `        response.value.as_str().unwrap_or("").to_string()`,
+    //               );
+    //             } else if (rustType === 'f64') {
+    //               content.push(
+    //                 `        response.value.as_f64().unwrap_or(0.0)`,
+    //               );
+    //             } else if (rustType === 'bool') {
+    //               content.push(
+    //                 `        response.value.as_bool().unwrap_or(false)`,
+    //               );
+    //             } else {
+    //               content.push(
+    //                 `        todo!("Convert JSII response to ${rustType}")`,
+    //               );
+    //             }
+    //             content.push(`    }`);
+
+    //             if (!prop.immutable) {
+    //               content.push(
+    //                 `    fn set_${rustName}(&mut self, value: ${rustType}) {`,
+    //               );
+    //               content.push(
+    //                 `        let client = client().expect("JSII client not initialized");`,
+    //               );
+    //               content.push(
+    //                 `        let mut client = client.lock().unwrap();`,
+    //               );
+
+    //               if (rustType === 'String') {
+    //                 content.push(
+    //                   `        let json_value = Value::String(value);`,
+    //                 );
+    //               } else if (rustType === 'f64') {
+    //                 content.push(
+    //                   `        let json_value = serde_json::Number::from_f64(value).map(Value::Number).unwrap_or(Value::Null);`,
+    //                 );
+    //               } else if (rustType === 'bool') {
+    //                 content.push(
+    //                   `        let json_value = Value::Bool(value);`,
+    //                 );
+    //               } else {
+    //                 content.push(
+    //                   `        let json_value = Value::Null; // TODO: Convert ${rustType} to JSON`,
+    //                 );
+    //               }
+
+    //               content.push(
+    //                 `        client.set(self.objref.clone(), "${prop.name}".to_string(), json_value)`,
+    //               );
+    //               content.push(
+    //                 `            .expect("Failed to set property ${prop.name}");`,
+    //               );
+    //               content.push(`    }`);
+    //             }
+    //           }
+
+    //           for (const method of ifaceType.methods ?? []) {
+    //             const params =
+    //               method.parameters
+    //                 ?.map((param) => {
+    //                   const rustType = this.toRustType(param.type);
+    //                   const rustName = reservedWords(param.name);
+    //                   return param.optional
+    //                     ? `${rustName}: Option<${rustType}>`
+    //                     : `${rustName}: ${rustType}`;
+    //                 })
+    //                 .join(', ') ?? '';
+
+    //             const methodName = reservedWords(method.name);
+    //             const returnType = method.returns
+    //               ? this.toRustType(method.returns.type)
+    //               : '()';
+
+    //             content.push(
+    //               `    fn ${methodName}(&self${params ? `, ${params}` : ''}) -> ${returnType} {`,
+    //             );
+    //             content.push(
+    //               `        let client = client().expect("JSII client not initialized");`,
+    //             );
+    //             content.push(
+    //               `        let mut client = client.lock().unwrap();`,
+    //             );
+    //             content.push(
+    //               `        let args = vec![]; // TODO: Convert parameters to JSON`,
+    //             );
+    //             content.push(
+    //               `        let response = client.invoke(self.objref.clone(), "${method.name}".to_string(), args)`,
+    //             );
+    //             content.push(
+    //               `            .expect("Failed to invoke method ${method.name}");`,
+    //             );
+
+    //             if (returnType === 'String') {
+    //               content.push(
+    //                 `        response.result.as_str().unwrap_or("").to_string()`,
+    //               );
+    //             } else if (returnType === 'f64') {
+    //               content.push(
+    //                 `        response.result.as_f64().unwrap_or(0.0)`,
+    //               );
+    //             } else if (returnType === 'bool') {
+    //               content.push(
+    //                 `        response.result.as_bool().unwrap_or(false)`,
+    //               );
+    //             } else if (returnType === '()') {
+    //               content.push(`        // void return`);
+    //             } else {
+    //               content.push(
+    //                 `        todo!("Convert JSII response to ${returnType}")`,
+    //               );
+    //             }
+    //             content.push(`    }`);
+    //           }
+    //         }
+    //       }
+    //     }
+
+    //     content.push(`}`);
+    //     content.push('');
+    //     implementedTraits.add(traitName);
+    //   }
+    // }
+
+    // // 🔧 Early removal of traits for manual implementation in @scope/jsii-calc-lib
+    // const currentAssemblyName =
+    //   (this.currentAssembly as any)?.originalName ?? 'unknown';
+    // if (currentAssemblyName === '@scope/jsii-calc-lib') {
+    //   if (className === 'Number') {
+    //     // Remove NumericValue from implementedTraits to prevent automatic generation (IDoublable is handled automatically)
+    //     implementedTraits.delete('NumericValue');
+    //     implementedTraits.delete('@scope/jsii-calc-lib.NumericValue');
+    //   } else if (className === 'Operation') {
+    //     // Remove NumericValue to prevent automatic generation
+    //     implementedTraits.delete('NumericValue');
+    //     implementedTraits.delete('@scope/jsii-calc-lib.NumericValue');
+    //   }
+    // }
+
+    // content.push('');
+
+    // // 🚀 Add missing supertrait implementations based on trait hierarchy
+
+    // const supertraitMappings: Record<string, string[]> = {
+    //   // Classes that implement BinaryOperation need Operation + IFriendly + NumericValue
+    //   Add: [
+    //     'ascopeajsiiacalcalib::Operation::Operation::Operation',
+    //     'ascopeajsiiacalcalib::IFriendly::IFriendly::IFriendly',
+    //     'ascopeajsiiacalcalib::NumericValue::NumericValue::NumericValue',
+    //   ],
+    //   Multiply: [
+    //     'ascopeajsiiacalcalib::Operation::Operation::Operation',
+    //     'ascopeajsiiacalcalib::IFriendly::IFriendly::IFriendly',
+    //     'ascopeajsiiacalcalib::NumericValue::NumericValue::NumericValue',
+    //   ],
+
+    //   // Classes that implement UnaryOperation need Operation + IFriendly + NumericValue
+    //   Negate: [
+    //     'ascopeajsiiacalcalib::Operation::Operation::Operation',
+    //     'ascopeajsiiacalcalib::IFriendly::IFriendly::IFriendly',
+    //     'ascopeajsiiacalcalib::NumericValue::NumericValue::NumericValue',
+    //   ],
+
+    //   // Classes that implement CompositeOperation need Operation + NumericValue
+    //   Calculator: [
+    //     'ascopeajsiiacalcalib::Operation::Operation::Operation',
+    //     'ascopeajsiiacalcalib::NumericValue::NumericValue::NumericValue',
+    //   ],
+    //   Power: [
+    //     'ascopeajsiiacalcalib::Operation::Operation::Operation',
+    //     'ascopeajsiiacalcalib::NumericValue::NumericValue::NumericValue',
+    //   ],
+    //   Sum: [
+    //     'ascopeajsiiacalcalib::Operation::Operation::Operation',
+    //     'ascopeajsiiacalcalib::NumericValue::NumericValue::NumericValue',
+    //   ],
+
+    //   // CompositeOperation itself needs Operation + NumericValue
+    //   CompositeOperation: [
+    //     'ascopeajsiiacalcalib::Operation::Operation::Operation',
+    //     'ascopeajsiiacalcalib::NumericValue::NumericValue::NumericValue',
+    //   ],
+
+    //   // Base class implementations
+    //   'module2700::Derived': ['module2700::Base::Base::Base'],
+
+    //   // External interface implementations
+    //   ImplementsInterfaceWithInternalSubclass: ['IInterfaceWithInternal'],
+    //   UpcasingReflectable: [
+    //     'ascopeajsiiacalcalib::submodule::IReflectable::IReflectable::IReflectable',
+    //   ],
+    //   Baz: [
+    //     'ascopeajsiiacalcabase::IBaseInterface::IBaseInterface::IBaseInterface',
+    //   ],
+    //   Class3: [
+    //     'ascopeajsiiacalcabase::IBaseInterface::IBaseInterface::IBaseInterface',
+    //   ],
+
+    //   // Module2702 hierarchy
+    //   Vpc: [
+    //     'module2702::IResource::IResource::IResource',
+    //     'module2702::Construct::Construct::Construct',
+    //     'module2702::IConstruct::IConstruct::IConstruct',
+    //   ],
+    //   Resource: [
+    //     'module2702::IConstruct::IConstruct::IConstruct',
+    //     'module2702::Construct::Construct::Construct',
+    //   ],
+    //   Construct: ['module2702::IConstruct::IConstruct::IConstruct'],
+
+    //   // Remove dependency crate fixes since they're handled manually in the fix block below
+    // };
+
+    // const missingTraits = supertraitMappings[className] ?? [];
+    // // for (const traitName of missingTraits) {
+    // //   const shortTraitName = traitName.split('::').pop() ?? traitName;
+    // //   // Check both full and short trait names to avoid duplicates
+    // //   if (
+    // //     !implementedTraits.has(traitName) &&
+    // //     !implementedTraits.has(shortTraitName)
+    // //   ) {
+    // //     const shortTraitName = traitName.split('::').pop() ?? traitName;
+    // //     content.push(`impl ${traitName} for ${className}Impl {`);
+
+    // //     // Add specific method implementations based on trait type
+    // //     if (shortTraitName === 'Operation') {
+    // //       content.push(`    fn toString(&self) -> String {`);
+    // //       content.push(
+    // //         `        let client = client().expect("JSII client not initialized");`,
+    // //       );
+    // //       content.push(`        let mut client = client.lock().unwrap();`);
+    // //       content.push(`        let args = vec![];`);
+    // //       content.push(
+    // //         `        let response = client.invoke(self.objref.clone(), "toString".to_string(), args)`,
+    // //       );
+    // //       content.push(
+    // //         `            .expect("Failed to invoke method toString");`,
+    // //       );
+    // //       content.push(
+    // //         `        response.result.as_str().unwrap_or("").to_string()`,
+    // //       );
+    // //       content.push(`    }`);
+    // //     } else if (shortTraitName === 'IFriendly') {
+    // //       content.push(`    fn hello(&self) -> String {`);
+    // //       content.push(
+    // //         `        let client = client().expect("JSII client not initialized");`,
+    // //       );
+    // //       content.push(`        let mut client = client.lock().unwrap();`);
+    // //       content.push(`        let args = vec![];`);
+    // //       content.push(
+    // //         `        let response = client.invoke(self.objref.clone(), "hello".to_string(), args)`,
+    // //       );
+    // //       content.push(`            .expect("Failed to invoke method hello");`);
+    // //       content.push(
+    // //         `        response.result.as_str().unwrap_or("").to_string()`,
+    // //       );
+    // //       content.push(`    }`);
+    // //     } else if (shortTraitName === 'NumericValue') {
+    // //       content.push(`    fn get_value(&self) -> f64 {`);
+    // //       content.push(
+    // //         `        let client = client().expect("JSII client not initialized");`,
+    // //       );
+    // //       content.push(`        let mut client = client.lock().unwrap();`);
+    // //       content.push(
+    // //         `        let response = client.get(self.objref.clone(), "value".to_string())`,
+    // //       );
+    // //       content.push(`            .expect("Failed to get property value");`);
+    // //       content.push(`        response.value.as_f64().unwrap_or(0.0)`);
+    // //       content.push(`    }`);
+    // //       content.push(`    fn toString(&self) -> String {`);
+    // //       content.push(
+    // //         `        let client = client().expect("JSII client not initialized");`,
+    // //       );
+    // //       content.push(`        let mut client = client.lock().unwrap();`);
+    // //       content.push(`        let args = vec![];`);
+    // //       content.push(
+    // //         `        let response = client.invoke(self.objref.clone(), "toString".to_string(), args)`,
+    // //       );
+    // //       content.push(
+    // //         `            .expect("Failed to invoke method toString");`,
+    // //       );
+    // //       content.push(
+    // //         `        response.result.as_str().unwrap_or("").to_string()`,
+    // //       );
+    // //       content.push(`    }`);
+    // //     } else if (shortTraitName === 'Base') {
+    // //       // Handle different Base traits
+    // //       if (traitName.includes('module2700')) {
+    // //         content.push(`    // Base trait methods would be implemented here`);
+    // //       } else {
+    // //         content.push(
+    // //           `    // External Base trait methods would be implemented here`,
+    // //         );
+    // //       }
+    // //     } else if (shortTraitName === 'IInterfaceWithInternal') {
+    // //       content.push(`    fn visible(&self) -> () {`);
+    // //       content.push(
+    // //         `        let client = client().expect("JSII client not initialized");`,
+    // //       );
+    // //       content.push(`        let mut client = client.lock().unwrap();`);
+    // //       content.push(`        let args = vec![];`);
+    // //       content.push(
+    // //         `        let response = client.invoke(self.objref.clone(), "visible".to_string(), args)`,
+    // //       );
+    // //       content.push(
+    // //         `            .expect("Failed to invoke method visible");`,
+    // //       );
+    // //       content.push(`        // void return`);
+    // //       content.push(`    }`);
+    // //     } else if (shortTraitName === 'IReflectable') {
+    // //       content.push(
+    // //         `    fn get_entries(&self) -> Vec<Box<(dyn ascopeajsiiacalcalib::submodule::ReflectableEntry::ReflectableEntry::ReflectableEntry + 'static)>> {`,
+    // //       );
+    // //       content.push(
+    // //         `        let client = client().expect("JSII client not initialized");`,
+    // //       );
+    // //       content.push(`        let mut client = client.lock().unwrap();`);
+    // //       content.push(`        let args = vec![];`);
+    // //       content.push(
+    // //         `        let response = client.invoke(self.objref.clone(), "entries".to_string(), args)`,
+    // //       );
+    // //       content.push(
+    // //         `            .expect("Failed to invoke method entries");`,
+    // //       );
+    // //       content.push(
+    // //         `        todo!("Convert JSII response to Vec<Box<dyn ReflectableEntry>>")`,
+    // //       );
+    // //       content.push(`    }`);
+    // //     } else if (shortTraitName === 'IBaseInterface') {
+    // //       content.push(`    fn bar(&self) -> () {`);
+    // //       content.push(
+    // //         `        let client = client().expect("JSII client not initialized");`,
+    // //       );
+    // //       content.push(`        let mut client = client.lock().unwrap();`);
+    // //       content.push(`        let args = vec![];`);
+    // //       content.push(
+    // //         `        client.invoke(self.objref.clone(), "bar".to_string(), args)`,
+    // //       );
+    // //       content.push(`            .expect("Failed to invoke method bar");`);
+    // //       content.push(`    }`);
+    // //       content.push(
+    // //         `    fn foo(&self, _: Box<(dyn ascopeajsiiacalcabase::IBaseInterface::IBaseInterface::IBaseInterface + 'static)>) {`,
+    // //       );
+    // //       content.push(
+    // //         `        let client = client().expect("JSII client not initialized");`,
+    // //       );
+    // //       content.push(`        let mut client = client.lock().unwrap();`);
+    // //       content.push(
+    // //         `        let args = vec![]; // TODO: Convert parameters to JSON`,
+    // //       );
+    // //       content.push(
+    // //         `        let response = client.invoke(self.objref.clone(), "foo".to_string(), args)`,
+    // //       );
+    // //       content.push(`            .expect("Failed to invoke method foo");`);
+    // //       content.push(`        // void return`);
+    // //       content.push(`    }`);
+    // //     } else if (shortTraitName === 'IResource') {
+    // //       content.push(`    fn resourceMethod(&self) -> () {`);
+    // //       content.push(
+    // //         `        let client = client().expect("JSII client not initialized");`,
+    // //       );
+    // //       content.push(`        let mut client = client.lock().unwrap();`);
+    // //       content.push(`        let args = vec![];`);
+    // //       content.push(
+    // //         `        let response = client.invoke(self.objref.clone(), "resourceMethod".to_string(), args)`,
+    // //       );
+    // //       content.push(
+    // //         `            .expect("Failed to invoke method resourceMethod");`,
+    // //       );
+    // //       content.push(`        // void return`);
+    // //       content.push(`    }`);
+    // //     } else if (shortTraitName === 'IConstruct') {
+    // //       content.push(`    fn constructMethod(&self) -> () {`);
+    // //       content.push(
+    // //         `        let client = client().expect("JSII client not initialized");`,
+    // //       );
+    // //       content.push(`        let mut client = client.lock().unwrap();`);
+    // //       content.push(`        let args = vec![];`);
+    // //       content.push(
+    // //         `        let response = client.invoke(self.objref.clone(), "constructMethod".to_string(), args)`,
+    // //       );
+    // //       content.push(
+    // //         `            .expect("Failed to invoke method constructMethod");`,
+    // //       );
+    // //       content.push(`        // void return`);
+    // //       content.push(`    }`);
+    // //     } else if (shortTraitName === 'IDoublable') {
+    // //       content.push(`    fn doubleValue(&self) -> f64 {`);
+    // //       content.push(
+    // //         `        let client = client().expect("JSII client not initialized");`,
+    // //       );
+    // //       content.push(`        let mut client = client.lock().unwrap();`);
+    // //       content.push(`        let args = vec![];`);
+    // //       content.push(
+    // //         `        let response = client.invoke(self.objref.clone(), "doubleValue".to_string(), args)`,
+    // //       );
+    // //       content.push(
+    // //         `            .expect("Failed to invoke method doubleValue");`,
+    // //       );
+    // //       content.push(`        response.result.as_f64().unwrap_or(0.0)`);
+    // //       content.push(`    }`);
+    // //     } else {
+    // //       content.push(`    // TODO: Implement methods for ${shortTraitName}`);
+    // //     }
+
+    // //     content.push(`}`);
+    // //     content.push('');
+    // //     implementedTraits.add(traitName);
+    // //   }
+    // // }
+
+    // content.push('');
+
+    // // 🔧 Fix specific compilation errors for dependency crates
+    // if (originalAssemblyName === '@scope/jsii-calc-lib') {
+    //   if (className === 'Number') {
+    //     // // Add NumericValue implementation (IDoublable is handled automatically)
+    //     // content.push(
+    //     //   `impl crate::NumericValue::NumericValue::NumericValue for ${className}Impl {`,
+    //     // );
+    //     // content.push(`    fn get_value(&self) -> f64 {`);
+    //     // content.push(
+    //     //   `        let client = client().expect("JSII client not initialized");`,
+    //     // );
+    //     // content.push(`        let mut client = client.lock().unwrap();`);
+    //     // content.push(
+    //     //   `        let response = client.get(self.objref.clone(), "value".to_string())`,
+    //     // );
+    //     // content.push(`            .expect("Failed to get property value");`);
+    //     // content.push(`        response.value.as_f64().unwrap_or(0.0)`);
+    //     // content.push(`    }`);
+    //     // content.push(`    fn toString(&self) -> String {`);
+    //     // content.push(
+    //     //   `        let client = client().expect("JSII client not initialized");`,
+    //     // );
+    //     // content.push(`        let mut client = client.lock().unwrap();`);
+    //     // content.push(`        let args = vec![];`);
+    //     // content.push(
+    //     //   `        let response = client.invoke(self.objref.clone(), "toString".to_string(), args)`,
+    //     // );
+    //     // content.push(
+    //     //   `            .expect("Failed to invoke method toString");`,
+    //     // );
+    //     // content.push(
+    //     //   `        response.result.as_str().unwrap_or("").to_string()`,
+    //     // );
+    //     // content.push(`    }`);
+    //     // content.push(`}`);
+    //     // content.push('');
+
+    //     // // Mark NumericValue as implemented to prevent automatic generation (IDoublable is handled automatically)
+    //     // implementedTraits.add('NumericValue');
+    //     // implementedTraits.add('@scope/jsii-calc-lib.NumericValue');
+    //   } else if (className === 'NumericValue') {
+    //     // NumericValueImpl needs Base implementation
+    //     // content.push(
+    //     //   `impl ascopeajsiiacalcabase::Base::Base::Base for ${className}Impl {`,
+    //     // );
+    //     // content.push(`    fn typeName(&self) -> Box<dyn std::any::Any> {`);
+    //     // content.push(
+    //     //   `        let client = client().expect("JSII client not initialized");`,
+    //     // );
+    //     // content.push(`        let mut client = client.lock().unwrap();`);
+    //     // content.push(`        let args = vec![];`);
+    //     // content.push(
+    //     //   `        let response = client.invoke(self.objref.clone(), "typeName".to_string(), args)`,
+    //     // );
+    //     // content.push(
+    //     //   `            .expect("Failed to invoke method typeName");`,
+    //     // );
+    //     // content.push(
+    //     //   `        todo!("Convert JSII response to Box<dyn std::any::Any>")`,
+    //     // );
+    //     // content.push(`    }`);
+    //     // content.push(`}`);
+    //     // content.push('');
+    //   } else if (className === 'Operation') {
+    //     // OperationImpl needs NumericValue implementation
+    //     content.push(
+    //       `impl crate::NumericValue::NumericValue::NumericValue for ${className}Impl {`,
+    //     );
+    //     content.push(`    fn get_value(&self) -> f64 {`);
+    //     content.push(
+    //       `        let client = client().expect("JSII client not initialized");`,
+    //     );
+    //     content.push(`        let mut client = client.lock().unwrap();`);
+    //     content.push(
+    //       `        let response = client.get(self.objref.clone(), "value".to_string())`,
+    //     );
+    //     content.push(`            .expect("Failed to get property value");`);
+    //     content.push(`        response.value.as_f64().unwrap_or(0.0)`);
+    //     content.push(`    }`);
+    //     content.push(`    fn toString(&self) -> String {`);
+    //     content.push(
+    //       `        let client = client().expect("JSII client not initialized");`,
+    //     );
+    //     content.push(`        let mut client = client.lock().unwrap();`);
+    //     content.push(`        let args = vec![];`);
+    //     content.push(
+    //       `        let response = client.invoke(self.objref.clone(), "toString".to_string(), args)`,
+    //     );
+    //     content.push(
+    //       `            .expect("Failed to invoke method toString");`,
+    //     );
+    //     content.push(
+    //       `        response.result.as_str().unwrap_or("").to_string()`,
+    //     );
+    //     content.push(`    }`);
+    //     content.push(`}`);
+    //     content.push('');
+
+    //     // Mark NumericValue as implemented to prevent automatic generation
+    //     implementedTraits.add('NumericValue');
+    //     implementedTraits.add('@scope/jsii-calc-lib.NumericValue');
+    //   }
+    // }
+
+    // content.push('');
+
+    // // Implement base class traits
+    // if (cls.base) {
+    //   const baseTypeName = cls.base.split('.').pop() ?? cls.base;
+
+    //   if (!implementedTraits.has(baseTypeName)) {
+    //     content.push(`impl ${baseTypeName} for ${className}Impl {`);
+
+    //     // Handle special external base classes that need specific method implementations
+    //     if (
+    //       baseTypeName === 'BaseFor2647' &&
+    //       className === 'ExtendAndImplement'
+    //     ) {
+    //       content.push(
+    //         `    fn foo(&self, _: Box<(dyn ascopeajsiiacalcabase::IBaseInterface::IBaseInterface::IBaseInterface + 'static)>) {`,
+    //       );
+    //       content.push(
+    //         `        let client = client().expect("JSII client not initialized");`,
+    //       );
+    //       content.push(`        let mut client = client.lock().unwrap();`);
+    //       content.push(
+    //         `        let args = vec![]; // TODO: Convert parameters to JSON`,
+    //       );
+    //       content.push(
+    //         `        let response = client.invoke(self.objref.clone(), "foo".to_string(), args)`,
+    //       );
+    //       content.push(`            .expect("Failed to invoke method foo");`);
+    //       content.push(`        // void return`);
+    //       content.push(`    }`);
+    //     } else if (this.currentAssembly?.types) {
+    //       const baseType = this.currentAssembly.types[cls.base];
+    //       if (baseType?.kind === TypeKind.Class) {
+    //         // Implement all methods from base class
+    //         for (const method of baseType.methods ?? []) {
+    //           const params =
+    //             method.parameters
+    //               ?.map((param) => {
+    //                 const rustType = this.toRustType(param.type);
+    //                 const rustName = reservedWords(param.name);
+    //                 return param.optional
+    //                   ? `${rustName}: Option<${rustType}>`
+    //                   : `${rustName}: ${rustType}`;
+    //               })
+    //               .join(', ') ?? '';
+
+    //           const methodName = reservedWords(method.name);
+    //           const returnType = method.returns
+    //             ? this.toRustType(method.returns.type)
+    //             : '()';
+
+    //           content.push(
+    //             `    fn ${methodName}(&self${params ? `, ${params}` : ''}) -> ${returnType} {`,
+    //           );
+    //           content.push(
+    //             `        let client = client().expect("JSII client not initialized");`,
+    //           );
+    //           content.push(`        let mut client = client.lock().unwrap();`);
+    //           content.push(
+    //             `        let args = vec![]; // TODO: Convert parameters to JSON`,
+    //           );
+    //           content.push(
+    //             `        let response = client.invoke(self.objref.clone(), "${method.name}".to_string(), args)`,
+    //           );
+    //           content.push(
+    //             `            .expect("Failed to invoke method ${method.name}");`,
+    //           );
+
+    //           // Generate proper return conversion
+    //           if (returnType === 'String') {
+    //             content.push(
+    //               `        response.result.as_str().unwrap_or("").to_string()`,
+    //             );
+    //           } else if (returnType === 'f64') {
+    //             content.push(`        response.result.as_f64().unwrap_or(0.0)`);
+    //           } else if (returnType === 'bool') {
+    //             content.push(
+    //               `        response.result.as_bool().unwrap_or(false)`,
+    //             );
+    //           } else if (returnType === '()') {
+    //             content.push(`        // void return`);
+    //           } else {
+    //             content.push(
+    //               `        todo!("Convert JSII response to ${returnType}")`,
+    //             );
+    //           }
+    //           content.push(`    }`);
+    //         }
+
+    //         // Implement all properties from base class
+    //         for (const prop of baseType.properties ?? []) {
+    //           const rustType = this.toRustType(prop.type);
+    //           const rustName = reservedWords(prop.name);
+
+    //           content.push(`    fn get_${rustName}(&self) -> ${rustType} {`);
+    //           content.push(
+    //             `        let client = client().expect("JSII client not initialized");`,
+    //           );
+    //           content.push(`        let mut client = client.lock().unwrap();`);
+    //           content.push(
+    //             `        let response = client.get(self.objref.clone(), "${prop.name}".to_string())`,
+    //           );
+    //           content.push(
+    //             `            .expect("Failed to get property ${prop.name}");`,
+    //           );
+
+    //           // Generate proper conversion based on type
+    //           if (rustType === 'String') {
+    //             content.push(
+    //               `        response.value.as_str().unwrap_or("").to_string()`,
+    //             );
+    //           } else if (rustType === 'f64') {
+    //             content.push(`        response.value.as_f64().unwrap_or(0.0)`);
+    //           } else if (rustType === 'bool') {
+    //             content.push(
+    //               `        response.value.as_bool().unwrap_or(false)`,
+    //             );
+    //           } else {
+    //             content.push(
+    //               `        todo!("Convert JSII response to ${rustType}")`,
+    //             );
+    //           }
+    //           content.push(`    }`);
+
+    //           if (!prop.immutable) {
+    //             content.push(
+    //               `    fn set_${rustName}(&mut self, value: ${rustType}) {`,
+    //             );
+    //             content.push(
+    //               `        let client = client().expect("JSII client not initialized");`,
+    //             );
+    //             content.push(
+    //               `        let mut client = client.lock().unwrap();`,
+    //             );
+
+    //             // Convert value to JSON based on type
+    //             if (rustType === 'String') {
+    //               content.push(
+    //                 `        let json_value = Value::String(value);`,
+    //               );
+    //             } else if (rustType === 'f64') {
+    //               content.push(
+    //                 `        let json_value = serde_json::Number::from_f64(value).map(Value::Number).unwrap_or(Value::Null);`,
+    //               );
+    //             } else if (rustType === 'bool') {
+    //               content.push(`        let json_value = Value::Bool(value);`);
+    //             } else {
+    //               content.push(
+    //                 `        let json_value = Value::Null; // TODO: Convert ${rustType} to JSON`,
+    //               );
+    //             }
+
+    //             content.push(
+    //               `        client.set(self.objref.clone(), "${prop.name}".to_string(), json_value)`,
+    //             );
+    //             content.push(
+    //               `            .expect("Failed to set property ${prop.name}");`,
+    //             );
+    //             content.push(`    }`);
+    //           }
+    //         }
+    //       }
+    //     }
+
+    //     content.push(`}`);
+    //     content.push('');
+    //     implementedTraits.add(baseTypeName);
+    //   }
+    // }
+
+    // // Implement interface traits
+    // if (cls.interfaces) {
+    //   for (const iface of cls.interfaces) {
+    //     const ifaceName = iface.split('.').pop() ?? iface;
+
+    //     if (!implementedTraits.has(ifaceName)) {
+    //       content.push(`impl ${ifaceName} for ${className}Impl {`);
+
+    //       // Handle special external interfaces that need specific method implementations
+    //       if (
+    //         ifaceName === 'IReflectable' &&
+    //         className === 'UpcasingReflectable'
+    //       ) {
+    //         content.push(
+    //           `    fn get_entries(&self) -> Vec<Box<(dyn ascopeajsiiacalcalib::submodule::ReflectableEntry::ReflectableEntry::ReflectableEntry + 'static)>> {`,
+    //         );
+    //         content.push(
+    //           `        let client = client().expect("JSII client not initialized");`,
+    //         );
+    //         content.push(`        let mut client = client.lock().unwrap();`);
+    //         content.push(`        let args = vec![];`);
+    //         content.push(
+    //           `        let response = client.invoke(self.objref.clone(), "entries".to_string(), args)`,
+    //         );
+    //         content.push(
+    //           `            .expect("Failed to invoke method entries");`,
+    //         );
+    //         content.push(
+    //           `        todo!("Convert JSII response to Vec<Box<dyn ReflectableEntry>>")`,
+    //         );
+    //         content.push(`    }`);
+    //       } else if (this.currentAssembly?.types) {
+    //         const ifaceType = this.currentAssembly.types[iface];
+    //         if (ifaceType?.kind === TypeKind.Interface) {
+    //           // Implement properties as getter/setter methods
+    //           for (const prop of ifaceType.properties ?? []) {
+    //             const rustType = this.toRustType(prop.type);
+    //             const rustName = reservedWords(prop.name);
+
+    //             content.push(`    fn get_${rustName}(&self) -> ${rustType} {`);
+    //             content.push(
+    //               `        let client = client().expect("JSII client not initialized");`,
+    //             );
+    //             content.push(
+    //               `        let mut client = client.lock().unwrap();`,
+    //             );
+    //             content.push(
+    //               `        let response = client.get(self.objref.clone(), "${prop.name}".to_string())`,
+    //             );
+    //             content.push(
+    //               `            .expect("Failed to get property ${prop.name}");`,
+    //             );
+
+    //             // Generate proper conversion based on type
+    //             if (rustType === 'String') {
+    //               content.push(
+    //                 `        response.value.as_str().unwrap_or("").to_string()`,
+    //               );
+    //             } else if (rustType === 'f64') {
+    //               content.push(
+    //                 `        response.value.as_f64().unwrap_or(0.0)`,
+    //               );
+    //             } else if (rustType === 'bool') {
+    //               content.push(
+    //                 `        response.value.as_bool().unwrap_or(false)`,
+    //               );
+    //             } else {
+    //               content.push(
+    //                 `        todo!("Convert JSII response to ${rustType}")`,
+    //               );
+    //             }
+    //             content.push(`    }`);
+
+    //             if (!prop.immutable) {
+    //               content.push(
+    //                 `    fn set_${rustName}(&mut self, value: ${rustType}) {`,
+    //               );
+    //               content.push(
+    //                 `        let client = client().expect("JSII client not initialized");`,
+    //               );
+    //               content.push(
+    //                 `        let mut client = client.lock().unwrap();`,
+    //               );
+
+    //               // Convert value to JSON based on type
+    //               if (rustType === 'String') {
+    //                 content.push(
+    //                   `        let json_value = Value::String(value);`,
+    //                 );
+    //               } else if (rustType === 'f64') {
+    //                 content.push(
+    //                   `        let json_value = serde_json::Number::from_f64(value).map(Value::Number).unwrap_or(Value::Null);`,
+    //                 );
+    //               } else if (rustType === 'bool') {
+    //                 content.push(
+    //                   `        let json_value = Value::Bool(value);`,
+    //                 );
+    //               } else {
+    //                 content.push(
+    //                   `        let json_value = Value::Null; // TODO: Convert ${rustType} to JSON`,
+    //                 );
+    //               }
+
+    //               content.push(
+    //                 `        client.set(self.objref.clone(), "${prop.name}".to_string(), json_value)`,
+    //               );
+    //               content.push(
+    //                 `            .expect("Failed to set property ${prop.name}");`,
+    //               );
+    //               content.push(`    }`);
+    //             }
+    //           }
+
+    //           // Implement methods
+    //           for (const method of ifaceType.methods ?? []) {
+    //             const params =
+    //               method.parameters
+    //                 ?.map((param) => {
+    //                   const rustType = this.toRustType(param.type);
+    //                   const rustName = reservedWords(param.name);
+    //                   return param.optional
+    //                     ? `${rustName}: Option<${rustType}>`
+    //                     : `${rustName}: ${rustType}`;
+    //                 })
+    //                 .join(', ') ?? '';
+
+    //             const methodName = reservedWords(method.name);
+    //             const returnType = method.returns
+    //               ? this.toRustType(method.returns.type)
+    //               : '()';
+
+    //             content.push(
+    //               `    fn ${methodName}(&self${params ? `, ${params}` : ''}) -> ${returnType} {`,
+    //             );
+    //             content.push(
+    //               `        let client = client().expect("JSII client not initialized");`,
+    //             );
+    //             content.push(
+    //               `        let mut client = client.lock().unwrap();`,
+    //             );
+    //             content.push(
+    //               `        let args = vec![]; // TODO: Convert parameters to JSON`,
+    //             );
+    //             content.push(
+    //               `        let response = client.invoke(self.objref.clone(), "${method.name}".to_string(), args)`,
+    //             );
+    //             content.push(
+    //               `            .expect("Failed to invoke method ${method.name}");`,
+    //             );
+
+    //             // Generate proper return conversion
+    //             if (returnType === 'String') {
+    //               content.push(
+    //                 `        response.result.as_str().unwrap_or("").to_string()`,
+    //               );
+    //             } else if (returnType === 'f64') {
+    //               content.push(
+    //                 `        response.result.as_f64().unwrap_or(0.0)`,
+    //               );
+    //             } else if (returnType === 'bool') {
+    //               content.push(
+    //                 `        response.result.as_bool().unwrap_or(false)`,
+    //               );
+    //             } else if (returnType === '()') {
+    //               content.push(`        // void return`);
+    //             } else {
+    //               content.push(
+    //                 `        todo!("Convert JSII response to ${returnType}")`,
+    //               );
+    //             }
+    //             content.push(`    }`);
+    //           }
+    //         }
+    //       }
+
+    //       content.push(`}`);
+    //       content.push('');
+    //       implementedTraits.add(ifaceName);
+    //     }
+    //   }
+    // }
+
+    // // Add missing Base trait implementations for module2700::Derived
+    // if (cls.namespace === 'module2700' && className === 'Derived') {
+    //   if (cls.base && cls.base.endsWith('.Base')) {
+    //     const baseTypeName = 'Base'; // Local Base trait
+    //     if (!implementedTraits.has(baseTypeName)) {
+    //       content.push(`impl ${baseTypeName} for ${className}Impl {`);
+    //       // Find the base type definition and implement its methods
+    //       if (this.currentAssembly?.types) {
+    //         const baseType = this.currentAssembly.types[cls.base];
+    //         if (baseType?.kind === TypeKind.Class) {
+    //           for (const method of baseType.methods ?? []) {
+    //             const params =
+    //               method.parameters
+    //                 ?.map((param) => {
+    //                   const rustType = this.toRustType(param.type);
+    //                   const rustName = reservedWords(param.name);
+    //                   return param.optional
+    //                     ? `${rustName}: Option<${rustType}>`
+    //                     : `${rustName}: ${rustType}`;
+    //                 })
+    //                 .join(', ') ?? '';
+
+    //             const methodName = reservedWords(method.name);
+    //             const returnType = method.returns
+    //               ? this.toRustType(method.returns.type)
+    //               : '()';
+
+    //             content.push(
+    //               `    fn ${methodName}(&self${params ? `, ${params}` : ''}) -> ${returnType} {`,
+    //             );
+    //             content.push(
+    //               `        let client = client().expect("JSII client not initialized");`,
+    //             );
+    //             content.push(
+    //               `        let mut client = client.lock().unwrap();`,
+    //             );
+    //             content.push(
+    //               `        let args = vec![]; // TODO: Convert parameters to JSON`,
+    //             );
+    //             content.push(
+    //               `        let response = client.invoke(self.objref.clone(), "${method.name}".to_string(), args)`,
+    //             );
+    //             content.push(
+    //               `            .expect("Failed to invoke method ${method.name}");`,
+    //             );
+
+    //             if (returnType === 'String') {
+    //               content.push(
+    //                 `        response.result.as_str().unwrap_or("").to_string()`,
+    //               );
+    //             } else if (returnType === 'f64') {
+    //               content.push(
+    //                 `        response.result.as_f64().unwrap_or(0.0)`,
+    //               );
+    //             } else if (returnType === 'bool') {
+    //               content.push(
+    //                 `        response.result.as_bool().unwrap_or(false)`,
+    //               );
+    //             } else if (returnType === '()') {
+    //               content.push(`        // void return`);
+    //             } else {
+    //               content.push(
+    //                 `        todo!("Convert JSII response to ${returnType}")`,
+    //               );
+    //             }
+    //             content.push(`    }`);
+    //           }
+    //         }
+    //       }
+    //       content.push(`}`);
+    //       content.push('');
+    //       implementedTraits.add(baseTypeName);
+    //     }
+    //   }
+    // }
   }
 
   protected onBeginEnum(enm: EnumType): void {
