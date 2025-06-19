@@ -21,7 +21,6 @@ import * as path from 'path';
 import { Generator, Legalese } from '../generator';
 import { Target, TargetOptions } from '../target';
 import { shell as _shell } from '../util';
-import { Enum } from './go/types';
 
 export default class Rust extends Target {
   protected readonly generator: RustGenerator;
@@ -795,69 +794,16 @@ class RustGenerator extends Generator {
     content.push(`}`);
     content.push('');
 
-    if (cls.kind === 'class') {
-      // if (!cls.abstract) {
-        for (const supertrait of supertraits) {
-          content.push(`impl ${supertrait} for ${cls.name}Impl {`);
+    if (cls.kind === TypeKind.Class) {
+      const implementedTraits = new Set<string>();
 
-          // Find interface by short name pattern
-          const matchingFqn = Object.keys(this.currentAssembly?.types ?? {}).find(
-            (fqn) => fqn.endsWith(`.${supertrait}`)
-          );
-          
-          if (matchingFqn) {
-            const ifaceType = this.currentAssembly?.types?.[matchingFqn];
-            if (ifaceType) {
-              // Generate property getters/setters
-              if (ifaceType.kind != 'enum') {
-                for (const prop of ifaceType.properties ?? []) {
-                  const rustType = this.toRustType(prop.type);
-                  const rustName = reservedWords(prop.name);
-
-                  // Getter
-                  content.push(`    fn get_${rustName}(&self) -> ${rustType} {`);
-                  content.push(`        todo!("Implement getter for ${prop.name}")`);
-                  content.push(`    }`);
-
-                  // Setter (if mutable)
-                  if (!prop.immutable) {
-                    content.push(`    fn set_${rustName}(&mut self, value: ${rustType}) {`);
-                    content.push(`        todo!("Implement setter for ${prop.name}")`);
-                    content.push(`    }`);
-                  }
-                }
-
-                // All methods
-                // Generate methods
-                for (const method of ifaceType.methods ?? []) {
-                  // Build parameter list
-                  const params = method.parameters
-                    ?.map((param) => {
-                      const rustType = this.toRustType(param.type);
-                      const rustName = reservedWords(param.name);
-                      return param.optional
-                        ? `${rustName}: Option<${rustType}>`
-                        : `${rustName}: ${rustType}`;
-                    })
-                    .join(', ') ?? '';
-
-                  const methodName = reservedWords(method.name);
-                  const returnType = method.returns
-                    ? this.toRustType(method.returns.type)
-                    : '()';
-
-                  // Generate method signature with todo body
-                  content.push(
-                    `    fn ${methodName}(&self${params ? `, ${params}` : ''}) -> ${returnType} {`,
-                  );
-                  content.push(`        todo!("Implement method ${method.name}")`);
-                  content.push(`    }`);
-                }
-              }
-            }
-              }
-
-          content.push('}');
+      for (const supertrait of supertraits) {
+        this.generateTraitImplementationsRecursive(
+          cls,
+          supertrait,
+          content,
+          implementedTraits,
+        );
       }
     }
 
@@ -865,10 +811,163 @@ class RustGenerator extends Generator {
     this.generateSupertraitImplementations(cls, content, supertraits);
   }
 
+  private generateTraitImplementationsRecursive(
+    cls: ClassType,
+    traitName: string,
+    content: string[],
+    implementedTraits: Set<string>,
+  ): void {
+    // If already implemented, skip to avoid duplicates
+    if (implementedTraits.has(traitName)) {
+      return;
+    }
+
+    // Find interface by short name pattern in current assembly
+    const matchingFqn = Object.keys(this.currentAssembly?.types ?? {}).find(
+      (fqn) => fqn.endsWith(`.${traitName}`),
+    );
+
+    if (matchingFqn) {
+      const typeDefinition = this.currentAssembly?.types?.[matchingFqn];
+      if (
+        typeDefinition &&
+        (typeDefinition.kind === TypeKind.Interface ||
+          typeDefinition.kind === TypeKind.Class)
+      ) {
+        // FIRST: Recursively implement all supertraits
+        if (typeDefinition.kind === TypeKind.Interface) {
+          // For interfaces, implement all super-interfaces
+          for (const superInterface of typeDefinition.interfaces ?? []) {
+            const superTraitName =
+              superInterface.split('.').pop() ?? superInterface;
+            this.generateTraitImplementationsRecursive(
+              cls,
+              superTraitName,
+              content,
+              implementedTraits,
+            );
+          }
+        } else if (typeDefinition.kind === TypeKind.Class) {
+          // For classes, implement the base class
+          if (typeDefinition.base) {
+            const baseTraitName =
+              typeDefinition.base.split('.').pop() ?? typeDefinition.base;
+            this.generateTraitImplementationsRecursive(
+              cls,
+              baseTraitName,
+              content,
+              implementedTraits,
+            );
+          }
+          // Also implement any interfaces the class implements
+          for (const iface of typeDefinition.interfaces ?? []) {
+            const ifaceTraitName = iface.split('.').pop() ?? iface;
+            this.generateTraitImplementationsRecursive(
+              cls,
+              ifaceTraitName,
+              content,
+              implementedTraits,
+            );
+          }
+        }
+
+        // THEN: Implement this trait
+        content.push(`impl ${traitName} for ${cls.name}Impl {`);
+
+        // Generate property getters/setters
+        for (const prop of typeDefinition.properties ?? []) {
+          const rustType = this.toRustType(prop.type);
+          const rustName = reservedWords(prop.name);
+
+          // Getter
+          content.push(`    fn get_${rustName}(&self) -> ${rustType} {`);
+          content.push(`        todo!("Implement getter for ${prop.name}")`);
+          content.push(`    }`);
+
+          // Setter (if mutable)
+          if (!prop.immutable) {
+            content.push(
+              `    fn set_${rustName}(&mut self, value: ${rustType}) {`,
+            );
+            content.push(`        todo!("Implement setter for ${prop.name}")`);
+            content.push(`    }`);
+          }
+        }
+
+        // Generate methods
+        for (const method of typeDefinition.methods ?? []) {
+          // Build parameter list
+          const params =
+            method.parameters
+              ?.map((param) => {
+                const rustType = this.toRustType(param.type);
+                const rustName = reservedWords(param.name);
+                return param.optional
+                  ? `${rustName}: Option<${rustType}>`
+                  : `${rustName}: ${rustType}`;
+              })
+              .join(', ') ?? '';
+
+          const methodName = reservedWords(method.name);
+          const returnType = method.returns
+            ? this.toRustType(method.returns.type)
+            : '()';
+
+          // Generate method signature with todo body
+          content.push(
+            `    fn ${methodName}(&self${params ? `, ${params}` : ''}) -> ${returnType} {`,
+          );
+          content.push(`        todo!("Implement method ${method.name}")`);
+          content.push(`    }`);
+        }
+
+        content.push('}');
+        content.push('');
+        implementedTraits.add(traitName);
+      }
+    } else {
+      // Handle external assembly traits (like Base from @scope/jsii-calc-base)
+      this.generateExternalTraitImplementation(
+        cls,
+        traitName,
+        content,
+        implementedTraits,
+      );
+    }
+  }
+
+  private generateExternalTraitImplementation(
+    cls: ClassType,
+    traitName: string,
+    content: string[],
+    implementedTraits: Set<string>,
+  ): void {
+    // Handle known external traits
+    if (traitName === 'Base') {
+      // Base trait from @scope/jsii-calc-base
+      content.push(
+        `impl ascopeajsiiacalcabase::Base::Base::Base for ${cls.name}Impl {`,
+      );
+      content.push(`    fn typeName(&self) -> Box<dyn std::any::Any> {`);
+      content.push(`        todo!("Implement method typeName")`);
+      content.push(`    }`);
+      content.push('}');
+      content.push('');
+      implementedTraits.add(traitName);
+    } else {
+      // For unknown external traits, generate a basic implementation
+      content.push(`impl ${traitName} for ${cls.name}Impl {`);
+      content.push(`    // TODO: External trait methods for ${traitName}`);
+      content.push('}');
+      content.push('');
+      implementedTraits.add(traitName);
+    }
+  }
+
   private generateSupertraitImplementations(
     cls: ClassType,
     content: string[],
-    supertraits: string[],
+    _supertraits: string[],
   ): void {
     const className = cls.name;
     const implementedTraits = new Set<string>();
@@ -929,7 +1028,7 @@ class RustGenerator extends Generator {
     // Only implement Base trait for classes that don't create circular dependencies
     // Avoid implementing Base trait in @scope/jsii-calc-base-of-base since it would create a circular dependency
     const assemblyName = this.currentAssembly?.name ?? '';
-    const shouldImplementBase =
+    const _shouldImplementBase =
       assemblyName !== 'ascopeajsiiacalcabaseaofabase' &&
       assemblyName !== 'ascopeajsiiacalcabase';
 
