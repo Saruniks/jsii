@@ -1376,10 +1376,8 @@ class RustGenerator extends Generator {
       (this.currentAssembly as any)?.originalName ?? 'unknown';
     if (currentAssemblyName === '@scope/jsii-calc-lib') {
       if (className === 'Number') {
-        // Remove IDoublable and NumericValue from implementedTraits to prevent automatic generation
-        implementedTraits.delete('IDoublable');
+        // Remove NumericValue from implementedTraits to prevent automatic generation (IDoublable is handled automatically)
         implementedTraits.delete('NumericValue');
-        implementedTraits.delete('@scope/jsii-calc-lib.IDoublable');
         implementedTraits.delete('@scope/jsii-calc-lib.NumericValue');
       } else if (className === 'Operation') {
         // Remove NumericValue to prevent automatic generation
@@ -1665,27 +1663,7 @@ class RustGenerator extends Generator {
     // 🔧 Fix specific compilation errors for dependency crates
     if (originalAssemblyName === '@scope/jsii-calc-lib') {
       if (className === 'Number') {
-        // Add IDoublable implementation
-        content.push(
-          `impl crate::IDoublable::IDoublable::IDoublable for ${className}Impl {`,
-        );
-        content.push(`    fn get_doubleValue(&self) -> f64 {`);
-        content.push(
-          `        let client = client().expect("JSII client not initialized");`,
-        );
-        content.push(`        let mut client = client.lock().unwrap();`);
-        content.push(
-          `        let response = client.get(self.objref.clone(), "doubleValue".to_string())`,
-        );
-        content.push(
-          `            .expect("Failed to get property doubleValue");`,
-        );
-        content.push(`        response.value.as_f64().unwrap_or(0.0)`);
-        content.push(`    }`);
-        content.push(`}`);
-        content.push('');
-
-        // Add NumericValue implementation
+        // Add NumericValue implementation (IDoublable is handled automatically)
         content.push(
           `impl crate::NumericValue::NumericValue::NumericValue for ${className}Impl {`,
         );
@@ -1718,6 +1696,10 @@ class RustGenerator extends Generator {
         content.push(`    }`);
         content.push(`}`);
         content.push('');
+
+        // Mark NumericValue as implemented to prevent automatic generation (IDoublable is handled automatically)
+        implementedTraits.add('NumericValue');
+        implementedTraits.add('@scope/jsii-calc-lib.NumericValue');
       } else if (className === 'NumericValue') {
         // NumericValueImpl needs Base implementation
         content.push(
@@ -1775,6 +1757,10 @@ class RustGenerator extends Generator {
         content.push(`    }`);
         content.push(`}`);
         content.push('');
+
+        // Mark NumericValue as implemented to prevent automatic generation
+        implementedTraits.add('NumericValue');
+        implementedTraits.add('@scope/jsii-calc-lib.NumericValue');
       }
     }
 
