@@ -995,7 +995,7 @@ class RustGenerator extends Generator {
           content.push(
             `    fn ${methodName}(&self${params ? `, ${params}` : ''}) -> ${returnType} {`,
           );
-          content.push(`        todo!("Implement method ${method.name}")`);
+          content.push(`        todo!("Implement method1 ${method.name}")`);
           content.push(`    }`);
         }
 
@@ -1106,7 +1106,7 @@ class RustGenerator extends Generator {
         `impl ascopeajsiiacalcabase::Base::Base::Base for ${cls.name}Impl {`,
       );
       content.push(`    fn typeName(&self) -> Box<dyn std::any::Any> {`);
-      content.push(`        todo!("Implement method typeName")`);
+      content.push(`        todo!("Implement method2 typeName")`);
       content.push(`    }`);
       content.push('}');
       content.push('');
@@ -1122,7 +1122,7 @@ class RustGenerator extends Generator {
         `impl ${traitPrefix}::Operation::Operation::Operation for ${cls.name}Impl {`,
       );
       content.push(`    fn toString(&self) -> String {`);
-      content.push(`        todo!("Implement method toString")`);
+      content.push(`        todo!("Implement method3 toString")`);
       content.push(`    }`);
       content.push('}');
       content.push('');
@@ -1149,7 +1149,7 @@ class RustGenerator extends Generator {
       content.push(`        todo!("Implement getter for value")`);
       content.push(`    }`);
       content.push(`    fn toString(&self) -> String {`);
-      content.push(`        todo!("Implement method toString")`);
+      content.push(`        todo!("Implement method4 toString")`);
       content.push(`    }`);
       content.push('}');
       content.push('');
@@ -1173,7 +1173,7 @@ class RustGenerator extends Generator {
         `impl ${traitPrefix}::IFriendly::IFriendly::IFriendly for ${cls.name}Impl {`,
       );
       content.push(`    fn hello(&self) -> String {`);
-      content.push(`        todo!("Implement method hello")`);
+      content.push(`        todo!("Implement method5 hello")`);
       content.push(`    }`);
       content.push('}');
       content.push('');
@@ -1182,10 +1182,10 @@ class RustGenerator extends Generator {
       // IFriendlier trait from jsii-calc, extends IFriendly
       content.push(`impl IFriendlier for ${cls.name}Impl {`);
       content.push(`    fn farewell(&self) -> String {`);
-      content.push(`        todo!("Implement method farewell")`);
+      content.push(`        todo!("Implement method6 farewell")`);
       content.push(`    }`);
       content.push(`    fn goodbye(&self) -> String {`);
-      content.push(`        todo!("Implement method goodbye")`);
+      content.push(`        todo!("Implement method7 goodbye")`);
       content.push(`    }`);
       content.push('}');
       content.push('');
@@ -1202,7 +1202,7 @@ class RustGenerator extends Generator {
       // IRandomNumberGenerator trait from jsii-calc
       content.push(`impl IRandomNumberGenerator for ${cls.name}Impl {`);
       content.push(`    fn next(&self) -> f64 {`);
-      content.push(`        todo!("Implement method next")`);
+      content.push(`        todo!("Implement method8 next")`);
       content.push(`    }`);
       content.push('}');
       content.push('');
@@ -1267,10 +1267,242 @@ class RustGenerator extends Generator {
     } else {
       // For unknown external traits, generate a basic implementation
       content.push(`impl ${traitName} for ${cls.name}Impl {`);
-      content.push(`    // TODO: External trait methods for ${traitName}`);
-      content.push('}');
-      content.push('');
-      implementedTraits.add(traitName);
+      // Search for a type whose FQN ends with .traitName
+      const traitFqn = Object.keys(this.currentAssembly?.types ?? {}).find(
+        (fqn) => fqn.endsWith(`.${traitName}`)
+      );
+      const trait = traitFqn ? this.currentAssembly?.types?.[traitFqn] : undefined;
+      if (trait && trait.kind != TypeKind.Enum) {
+        for (const prop of trait.properties ?? []) {
+          const rustType = this.toRustType(prop.type);
+          const rustName = reservedWords(prop.name);
+          content.push(`    fn get_${rustName}(&self) -> ${rustType} {`);
+          content.push(`        todo!("Implement getter for ${prop.name}")`);
+          content.push(`    }`);
+
+          if (!prop.immutable) {
+            content.push(`    fn set_${rustName}(&mut self, value: ${rustType}) {`);
+            content.push(
+              `        todo!("Implement setter for ${prop.name}")`,
+            );
+            content.push(`    }`);
+          }
+        }
+      
+        // Generate empty methods for all interface methods
+        for (const method of trait.methods ?? []) {
+          const params =
+            method.parameters
+              ?.map((p) => {
+                const rustType = this.toRustType(p.type);
+                const rustName = reservedWords(p.name);
+                return p.optional
+                  ? `${rustName}: Option<${rustType}>`
+                  : `${rustName}: ${rustType}`;
+              })
+              .join(', ') ?? '';
+          const returnType = method.returns
+            ? this.toRustType(method.returns.type)
+            : '()';
+          const methodName = reservedWords(method.name);
+          content.push(
+            `    fn ${methodName}(&self${params ? `, ${params}` : ''}) -> ${returnType} {`,
+          );
+          content.push(`        todo!("Implement method9 ${method.name}")`);
+          content.push(`    }`);
+        }
+
+        content.push(`    }`);
+        implementedTraits.add(traitName);
+
+        for (const subtrait of trait.interfaces ?? []) {
+
+          const interfaceName = subtrait.split('.').pop() ?? subtrait;
+
+          // const subtraitRaw = (trait as ClassType).base;
+          let supertraitReal = subtrait && this.currentAssembly?.types?.[subtrait] ? subtrait : undefined;
+          if (!supertraitReal && subtrait) {
+            // fallback: search by suffix if not found directly
+            supertraitReal = Object.keys(this.currentAssembly?.types ?? {}).find(
+              (fqn) => fqn.endsWith(`.${subtrait}`)
+            );
+          }
+
+          let supertraitFqn = supertraitReal && this.currentAssembly?.types?.[supertraitReal] ? supertraitReal : undefined;
+
+          let supertraitType = supertraitFqn ? this.currentAssembly?.types?.[supertraitFqn] : undefined;
+
+          if (supertraitType && (supertraitType.kind === TypeKind.Class || supertraitType.kind === TypeKind.Interface)) {
+              if (!implementedTraits.has(interfaceName)) {
+                content.push(`impl ${interfaceName} for ${cls.name}Impl {`);
+
+                implementedTraits.add(interfaceName);
+
+                // if (supertraitReal) {
+                //   implementedTraits.add(supertraitReal);
+                // }
+
+                // content.push(`    fn get_${interfaceName?}(&self) -> String {`);
+                for (const method of supertraitType.methods ?? []) {
+                  const params =
+                    method.parameters
+                      ?.map((p) => {
+                        const rustType = this.toRustType(p.type);
+                        const rustName = reservedWords(p.name);
+                        return p.optional
+                          ? `${rustName}: Option<${rustType}>`
+                          : `${rustName}: ${rustType}`;
+                      })
+                      .join(', ') ?? '';
+                  const returnType = method.returns
+                    ? this.toRustType(method.returns.type)
+                    : '()';
+                  const methodName = reservedWords(method.name);
+                  content.push(
+                    `    fn ${methodName}(&self${params ? `, ${params}` : ''}) -> ${returnType} {`,
+                  );
+                  content.push(`        todo!("Implement method for ${interfaceName}")`);
+                  content.push(`    }`);
+                }
+                content.push(`    }`);
+              }
+            }
+          }
+      } else {
+        content.push(`    }`);
+
+        // If it's an enum, just provide a basic implementation
+        content.push(` // can't do ${traitName}`);
+      }
+
+      // Print actual object not [object Object]
+      // content.push(`// ${JSON.stringify(trait, null, 2)}`);      
+
+      // If something is implemented, then check if it has base and also implement that
+      if (
+        trait &&
+        trait.kind != 'enum' &&
+        (trait as ClassType).base
+      ) {
+        content.push(`// GOT INSIDE BASE IMPLEMENTATION`);      
+
+        // content.push(`// Base found, implementing base methods...`);
+        // content.push(`base = ${(trait as ClassType).base}`);
+
+        const baseFqnRaw = (trait as ClassType).base;
+        let baseFqn = baseFqnRaw && this.currentAssembly?.types?.[baseFqnRaw] ? baseFqnRaw : undefined;
+        if (!baseFqn && baseFqnRaw) {
+          // fallback: search by suffix if not found directly
+          baseFqn = Object.keys(this.currentAssembly?.types ?? {}).find(
+            (fqn) => fqn.endsWith(`.${baseFqnRaw}`)
+          );
+        }
+
+        // content.push(`// HERE baseFqn = ${baseFqn}`);      
+
+        if (baseFqn) {
+          // content.push(`// HERE baseFqn = ${baseFqn}`);      
+          const base = this.currentAssembly?.types?.[baseFqn];
+          if (base && base.kind != 'enum' && !implementedTraits.has(base.name)) {
+            
+            implementedTraits.add(base.name);
+            content.push(`impl ${base.name} for ${cls.name}Impl {`);
+
+            for (const method of base.methods ?? []) {
+              const params =
+                method.parameters
+                  ?.map((p) => {
+                    const rustType = this.toRustType(p.type);
+                    const rustName = reservedWords(p.name);
+                    return p.optional
+                      ? `${rustName}: Option<${rustType}>`
+                      : `${rustName}: ${rustType}`;
+                  })
+                  .join(', ') ?? '';
+              const returnType = method.returns
+                ? this.toRustType(method.returns.type)
+                : '()';
+              const methodName = reservedWords(method.name);
+              content.push(
+                `    fn ${methodName}(&self${params ? `, ${params}` : ''}) -> ${returnType} {`,
+              );
+              content.push(`        todo!("Implement method10 ${method.name}")`);
+              content.push(`    }`);
+            }
+
+            for (const prop of base.properties ?? []) {
+              const rustType = this.toRustType(prop.type);
+              const rustName = reservedWords(prop.name);
+              content.push(`    fn get_${rustName}(&self) -> ${rustType} {`);
+              content.push(`        todo!("Implement getter for ${prop.name}")`);
+              content.push(`    }`);
+
+              if (!prop.immutable) {
+                content.push(
+                  `    fn set_${rustName}(&mut self, value: ${rustType}) {`,
+                );
+                content.push(
+                  `        todo!("Implement setter for ${prop.name}")`,
+                );
+                content.push(`    }`);
+              }
+            }
+          }
+
+          content.push(`}`);
+
+          // Implement all the traits of the base class
+          for (const supertrait of (base as ClassType).interfaces ?? []) {
+            const supertraitName = supertrait.split('.').pop() ?? supertrait;
+
+            if (!implementedTraits.has(supertraitName)) {
+
+              implementedTraits.add(supertraitName);
+              content.push(`impl ${supertraitName} for ${cls.name}Impl {`);
+
+              // Find interface by FQN
+              // Find raw supertrait name
+              let supertraitFqn = supertrait && this.currentAssembly?.types?.[supertrait] ? supertrait : undefined;
+              if (!supertraitFqn && supertrait) {
+                // fallback: search by suffix if not found directly
+                supertraitFqn = Object.keys(this.currentAssembly?.types ?? {}).find(
+                  (fqn) => fqn.endsWith(`.${supertrait}`)
+                );
+              }
+            
+              const supertraitType = supertraitFqn ? this.currentAssembly?.types?.[supertraitFqn] : undefined;
+              if (
+                supertraitType &&
+                (supertraitType.kind === TypeKind.Class || supertraitType.kind === TypeKind.Interface)
+              ) {
+                for (const method of supertraitType.methods ?? []) {
+                  const params =
+                    method.parameters
+                      ?.map((p) => {
+                        const rustType = this.toRustType(p.type);
+                        const rustName = reservedWords(p.name);
+                        return p.optional
+                          ? `${rustName}: Option<${rustType}>`
+                          : `${rustName}: ${rustType}`;
+                      })
+                      .join(', ') ?? '';
+                  const returnType = method.returns
+                    ? this.toRustType(method.returns.type)
+                    : '()';
+                  const methodName = reservedWords(method.name);
+                  content.push(
+                    `    fn ${methodName}(&self${params ? `, ${params}` : ''}) -> ${returnType} {`,
+                  );
+                  content.push(`        todo!("Implement method11 ${method.name}")`);
+                  content.push(`    }`);
+                }
+              }
+
+              content.push(`}`);
+            }
+          }
+        }
+      }
     }
   }
 
