@@ -1160,35 +1160,35 @@ class RustGenerator extends Generator {
     //   content.push('');
     //   implementedTraits.add(traitName);
     // } else
-    if (traitName === 'Operation') {
-      // Operation trait from @scope/jsii-calc-lib
-      const currentAssemblyName = this.currentAssembly?.name ?? '';
-      const traitPrefix =
-        currentAssemblyName === 'ascopeajsiiacalcalib'
-          ? 'crate'
-          : 'ascopeajsiiacalcalib';
-      content.push(
-        `impl ${traitPrefix}::Operation::Operation::Operation for ${cls.name}Impl {`,
-      );
-      content.push(`    fn toString(&self) -> String {`);
-      content.push(`        todo!("Implement method3 toString")`);
-      content.push(`    }`);
-      content.push('}');
-      content.push('');
-      implementedTraits.add(traitName);
+    // if (traitName === 'Operation') {
+    //   // Operation trait from @scope/jsii-calc-lib
+    //   const currentAssemblyName = this.currentAssembly?.name ?? '';
+    //   const traitPrefix =
+    //     currentAssemblyName === 'ascopeajsiiacalcalib'
+    //       ? 'crate'
+    //       : 'ascopeajsiiacalcalib';
+    //   content.push(
+    //     `impl ${traitPrefix}::Operation::Operation::Operation for ${cls.name}Impl {`,
+    //   );
+    //   content.push(`    fn toString(&self) -> String {`);
+    //   content.push(`        todo!("Implement method3 toString")`);
+    //   content.push(`    }`);
+    //   content.push('}');
+    //   content.push('');
+    //   implementedTraits.add(traitName);
 
-      // Operation extends NumericValue, so recursively implement that too
-      console.log(
-        `DEBUG: Recursively implementing NumericValue for ${cls.name}Impl`,
-      );
-      this.generateExternalTraitImplementation(
-        cls,
-        'NumericValue',
-        fullTraitName,
-        content,
-        implementedTraits,
-      );
-    } 
+    //   // Operation extends NumericValue, so recursively implement that too
+    //   console.log(
+    //     `DEBUG: Recursively implementing NumericValue for ${cls.name}Impl`,
+    //   );
+    //   this.generateExternalTraitImplementation(
+    //     cls,
+    //     'NumericValue',
+    //     fullTraitName,
+    //     content,
+    //     implementedTraits,
+    //   );
+    // } 
     // else 
     // if (traitName === 'NumericValue') {
     //   // NumericValue trait from @scope/jsii-calc-lib
@@ -1226,119 +1226,119 @@ class RustGenerator extends Generator {
     //     implementedTraits,
     //   );
     // } 
-    else if (traitName === 'IFriendly') {
-      // IFriendly trait from @scope/jsii-calc-lib
-      const currentAssemblyName = this.currentAssembly?.name ?? '';
-      const traitPrefix =
-        currentAssemblyName === 'ascopeajsiiacalcalib'
-          ? 'crate'
-          : 'ascopeajsiiacalcalib';
-      content.push(
-        `impl ${traitPrefix}::IFriendly::IFriendly::IFriendly for ${cls.name}Impl {`,
-      );
-      content.push(`    fn hello(&self) -> String {`);
-      content.push(`        todo!("Implement method5 hello")`);
-      content.push(`    }`);
-      content.push('}');
-      content.push('');
-      implementedTraits.add(traitName);
-    } else if (traitName === 'IFriendlier') {
-      // IFriendlier trait from jsii-calc, extends IFriendly
-      content.push(`impl IFriendlier for ${cls.name}Impl {`);
-      content.push(`    fn farewell(&self) -> String {`);
-      content.push(`        todo!("Implement method6 farewell")`);
-      content.push(`    }`);
-      content.push(`    fn goodbye(&self) -> String {`);
-      content.push(`        todo!("Implement method7 goodbye")`);
-      content.push(`    }`);
-      content.push('}');
-      content.push('');
-      implementedTraits.add(traitName);
+    // else if (traitName === 'IFriendly') {
+    //   // IFriendly trait from @scope/jsii-calc-lib
+    //   const currentAssemblyName = this.currentAssembly?.name ?? '';
+    //   const traitPrefix =
+    //     currentAssemblyName === 'ascopeajsiiacalcalib'
+    //       ? 'crate'
+    //       : 'ascopeajsiiacalcalib';
+    //   content.push(
+    //     `impl ${traitPrefix}::IFriendly::IFriendly::IFriendly for ${cls.name}Impl {`,
+    //   );
+    //   content.push(`    fn hello(&self) -> String {`);
+    //   content.push(`        todo!("Implement method5 hello")`);
+    //   content.push(`    }`);
+    //   content.push('}');
+    //   content.push('');
+    //   implementedTraits.add(traitName);
+    // } else if (traitName === 'IFriendlier') {
+    //   // IFriendlier trait from jsii-calc, extends IFriendly
+    //   content.push(`impl IFriendlier for ${cls.name}Impl {`);
+    //   content.push(`    fn farewell(&self) -> String {`);
+    //   content.push(`        todo!("Implement method6 farewell")`);
+    //   content.push(`    }`);
+    //   content.push(`    fn goodbye(&self) -> String {`);
+    //   content.push(`        todo!("Implement method7 goodbye")`);
+    //   content.push(`    }`);
+    //   content.push('}');
+    //   content.push('');
+    //   implementedTraits.add(traitName);
 
-      console.log(`DEBUGaaa: fullTraitName=${fullTraitName}`);
+    //   console.log(`DEBUGaaa: fullTraitName=${fullTraitName}`);
 
-      // IFriendlier extends IFriendly
-      this.generateExternalTraitImplementation(
-        cls,
-        'IFriendly',
-        fullTraitName,
-        content,
-        implementedTraits,
-      );
-    } else if (traitName === 'IRandomNumberGenerator') {
-      // IRandomNumberGenerator trait from jsii-calc
-      content.push(`impl IRandomNumberGenerator for ${cls.name}Impl {`);
-      content.push(`    fn next(&self) -> f64 {`);
-      content.push(`        todo!("Implement method8 next")`);
-      content.push(`    }`);
-      content.push('}');
-      content.push('');
-      implementedTraits.add(traitName);
-    } else if (traitName === 'IFriendlyRandomGenerator') {
-      // IFriendlyRandomGenerator trait from jsii-calc, extends IFriendly + IRandomNumberGenerator
-      content.push(`impl IFriendlyRandomGenerator for ${cls.name}Impl {`);
-      content.push(
-        `    // Inherits all methods from IFriendly and IRandomNumberGenerator`,
-      );
-      content.push('}');
-      content.push('');
-      implementedTraits.add(traitName);
+    //   // IFriendlier extends IFriendly
+    //   this.generateExternalTraitImplementation(
+    //     cls,
+    //     'IFriendly',
+    //     fullTraitName,
+    //     content,
+    //     implementedTraits,
+    //   );
+    // } else if (traitName === 'IRandomNumberGenerator') {
+    //   // IRandomNumberGenerator trait from jsii-calc
+    //   content.push(`impl IRandomNumberGenerator for ${cls.name}Impl {`);
+    //   content.push(`    fn next(&self) -> f64 {`);
+    //   content.push(`        todo!("Implement method8 next")`);
+    //   content.push(`    }`);
+    //   content.push('}');
+    //   content.push('');
+    //   implementedTraits.add(traitName);
+    // } else if (traitName === 'IFriendlyRandomGenerator') {
+    //   // IFriendlyRandomGenerator trait from jsii-calc, extends IFriendly + IRandomNumberGenerator
+    //   content.push(`impl IFriendlyRandomGenerator for ${cls.name}Impl {`);
+    //   content.push(
+    //     `    // Inherits all methods from IFriendly and IRandomNumberGenerator`,
+    //   );
+    //   content.push('}');
+    //   content.push('');
+    //   implementedTraits.add(traitName);
 
 
-      console.log(`DEBUGaaa: fullTraitName=${fullTraitName}`);
+    //   console.log(`DEBUGaaa: fullTraitName=${fullTraitName}`);
 
-      // Recursively implement parent traits
-      this.generateExternalTraitImplementation(
-        cls,
-        'IFriendly',
-        fullTraitName,
-        content,
-        implementedTraits,
-      );
-      console.log(`DEBUGawfawf: fullTraitName=${fullTraitName}`);
+    //   // Recursively implement parent traits
+    //   this.generateExternalTraitImplementation(
+    //     cls,
+    //     'IFriendly',
+    //     fullTraitName,
+    //     content,
+    //     implementedTraits,
+    //   );
+    //   console.log(`DEBUGawfawf: fullTraitName=${fullTraitName}`);
 
-      this.generateExternalTraitImplementation(
-        cls,
-        'IRandomNumberGenerator',
-        fullTraitName,
-        content,
-        implementedTraits,
-      );
-    } else if (traitName === 'IDoublable') {
-      // IDoublable trait from @scope/jsii-calc-lib
-      const currentAssemblyName = this.currentAssembly?.name ?? '';
-      const traitPrefix =
-        currentAssemblyName === 'ascopeajsiiacalcalib'
-          ? 'crate'
-          : 'ascopeajsiiacalcalib';
-      content.push(
-        `impl ${traitPrefix}::IDoublable::IDoublable::IDoublable for ${cls.name}Impl {`,
-      );
-      content.push(`    fn get_doubleValue(&self) -> f64 {`);
-      content.push(`        todo!("Implement getter for doubleValue")`);
-      content.push(`    }`);
-      content.push('}');
-      content.push('');
-      implementedTraits.add(traitName);
-    } else if (traitName === 'IReflectable') {
-      // IReflectable trait from @scope/jsii-calc-lib.submodule
-      const currentAssemblyName = this.currentAssembly?.name ?? '';
-      const traitPrefix =
-        currentAssemblyName === 'ascopeajsiiacalcalib'
-          ? 'crate'
-          : 'ascopeajsiiacalcalib';
-      content.push(
-        `impl ${traitPrefix}::submodule::IReflectable::IReflectable::IReflectable for ${cls.name}Impl {`,
-      );
-      content.push(
-        `    fn get_entries(&self) -> Vec<Box<dyn ${traitPrefix}::submodule::ReflectableEntry::ReflectableEntry::ReflectableEntry>> {`,
-      );
-      content.push(`        todo!("Implement getter for entries")`);
-      content.push(`    }`);
-      content.push('}');
-      content.push('');
-      implementedTraits.add(traitName);
-    } else {
+    //   this.generateExternalTraitImplementation(
+    //     cls,
+    //     'IRandomNumberGenerator',
+    //     fullTraitName,
+    //     content,
+    //     implementedTraits,
+    //   );
+    // } else if (traitName === 'IDoublable') {
+    //   // IDoublable trait from @scope/jsii-calc-lib
+    //   const currentAssemblyName = this.currentAssembly?.name ?? '';
+    //   const traitPrefix =
+    //     currentAssemblyName === 'ascopeajsiiacalcalib'
+    //       ? 'crate'
+    //       : 'ascopeajsiiacalcalib';
+    //   content.push(
+    //     `impl ${traitPrefix}::IDoublable::IDoublable::IDoublable for ${cls.name}Impl {`,
+    //   );
+    //   content.push(`    fn get_doubleValue(&self) -> f64 {`);
+    //   content.push(`        todo!("Implement getter for doubleValue")`);
+    //   content.push(`    }`);
+    //   content.push('}');
+    //   content.push('');
+    //   implementedTraits.add(traitName);
+    // } else if (traitName === 'IReflectable') {
+    //   // IReflectable trait from @scope/jsii-calc-lib.submodule
+    //   const currentAssemblyName = this.currentAssembly?.name ?? '';
+    //   const traitPrefix =
+    //     currentAssemblyName === 'ascopeajsiiacalcalib'
+    //       ? 'crate'
+    //       : 'ascopeajsiiacalcalib';
+    //   content.push(
+    //     `impl ${traitPrefix}::submodule::IReflectable::IReflectable::IReflectable for ${cls.name}Impl {`,
+    //   );
+    //   content.push(
+    //     `    fn get_entries(&self) -> Vec<Box<dyn ${traitPrefix}::submodule::ReflectableEntry::ReflectableEntry::ReflectableEntry>> {`,
+    //   );
+    //   content.push(`        todo!("Implement getter for entries")`);
+    //   content.push(`    }`);
+    //   content.push('}');
+    //   content.push('');
+    //   implementedTraits.add(traitName);
+    // } else {
       
       // const imports = this.getImportsForType(ifc);
       // for (const importStmt of imports) {
@@ -1779,7 +1779,7 @@ class RustGenerator extends Generator {
             }
           }
         }
-      }
+      // }
     }
   }
 
