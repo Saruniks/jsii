@@ -1188,42 +1188,45 @@ class RustGenerator extends Generator {
         content,
         implementedTraits,
       );
-    } else if (traitName === 'NumericValue') {
-      // NumericValue trait from @scope/jsii-calc-lib
-      const currentAssemblyName = this.currentAssembly?.name ?? '';
-      const traitPrefix =
-        currentAssemblyName === 'ascopeajsiiacalcalib'
-          ? 'crate'
-          : 'ascopeajsiiacalcalib';
-      content.push(
-        `impl ${traitPrefix}::NumericValue::NumericValue::NumericValue for ${cls.name}Impl {`,
-      );
-      content.push(`    fn get_value(&self) -> f64 {`);
-      content.push(`        todo!("Implement getter for value")`);
-      content.push(`    }`);
-      content.push(`    fn toString(&self) -> String {`);
-      content.push(`        todo!("Implement method4 toString")`);
-      content.push(`    }`);
-      content.push('}');
-      content.push('');
-      implementedTraits.add(traitName);
+    } 
+    // else 
+    // if (traitName === 'NumericValue') {
+    //   // NumericValue trait from @scope/jsii-calc-lib
+    //   const currentAssemblyName = this.currentAssembly?.name ?? '';
+    //   const traitPrefix =
+    //     currentAssemblyName === 'ascopeajsiiacalcalib'
+    //       ? 'crate'
+    //       : 'ascopeajsiiacalcalib';
+    //   content.push(
+    //     `impl ${traitPrefix}::NumericValue::NumericValue::NumericValue for ${cls.name}Impl {`,
+    //   );
+    //   content.push(`    fn get_value(&self) -> f64 {`);
+    //   content.push(`        todo!("Implement getter for value")`);
+    //   content.push(`    }`);
+    //   content.push(`    fn toString(&self) -> String {`);
+    //   content.push(`        todo!("Implement method4 toString")`);
+    //   content.push(`    }`);
+    //   content.push('}');
+    //   content.push('');
+    //   implementedTraits.add(traitName);
 
 
-      // NumericValue extends Base, so recursively implement that too
-      console.log(
-        `DEBUG: Recursively implementing Base for ${cls.name}Impl`,
-      );
-      console.log(`DEBUG: fullTraitName=${fullTraitName}`);
-      // Use the full trait name to ensure
+    //   // NumericValue extends Base, so recursively implement that too
+    //   console.log(
+    //     `DEBUG: Recursively implementing Base for ${cls.name}Impl`,
+    //   );
+    //   console.log(`DEBUG: fullTraitName=${fullTraitName}`);
+    //   // Use the full trait name to ensure
     
-      this.generateExternalTraitImplementation(
-        cls,
-        'Base',
-        fullTraitName,
-        content,
-        implementedTraits,
-      );
-    } else if (traitName === 'IFriendly') {
+    //   this.generateExternalTraitImplementation(
+    //     cls,
+    //     'Base',
+    //     fullTraitName,
+    //     content,
+    //     implementedTraits,
+    //   );
+    // } 
+    else if (traitName === 'IFriendly') {
       // IFriendly trait from @scope/jsii-calc-lib
       const currentAssemblyName = this.currentAssembly?.name ?? '';
       const traitPrefix =
@@ -1372,13 +1375,13 @@ class RustGenerator extends Generator {
           
           // Look in loaded dependency assemblies
           for (const [depName, depAssembly] of Object.entries(this.depAssemblies)) {
-            // if (traitFqn.startsWith(`${depName}.`) || assemblyName === depName) {
+            if (traitFqn.startsWith(`${depName}.`) || assemblyName === depName) {
               // This is from a dependency - look for the type there
               if (depAssembly.types && traitFqn in depAssembly.types) {
                 trait = depAssembly.types[traitFqn];
                 break;
               }
-            // }
+            }
           }
         }
       } else {
@@ -1398,14 +1401,15 @@ class RustGenerator extends Generator {
           
           // Look in loaded dependency assemblies
           for (const [depName, depAssembly] of Object.entries(this.depAssemblies)) {
+            console.log(`DEBUG: Checking dependency ${depName} for trait ${traitName}, fullTraitName=${fullTraitName}`);
             // if (fullTraitName.startsWith(`${depName}.`) || assemblyName === depName) {
-            // if (fullTraitName.startsWith(`${depName}.`)) {
+            if (fullTraitName.startsWith(`${depName}.`)) {
               // This is from a dependency - look for the type there
               if (depAssembly.types) {
                 // Search by ends with traitName
-                const fullTraitName = Object.keys(depAssembly.types).find(
-                  (fqn) => fqn.endsWith(`.${traitName}`)
-                );
+                // const fullTraitName = Object.keys(depAssembly.types).find(
+                //   (fqn) => fqn.endsWith(`.${traitName}`)
+                // );
                 console.log(`DEBUG: Found full trait name ${fullTraitName} in dependency ${depName}`);
                 if (fullTraitName) {
                 // console.log(`DEBUG: Found trait ${traitName} in dependency ${depName}`);
@@ -1414,7 +1418,7 @@ class RustGenerator extends Generator {
                   break;
                 }
               }
-            // }
+            }
           }
         }
       }
@@ -1661,9 +1665,11 @@ class RustGenerator extends Generator {
                 content.push(`    }`);
               }
             }
+
+              content.push(`}`);
+
           }
 
-          content.push(`}`);
 
           // Implement all the traits of the base class
           for (const supertrait of (base as ClassType).interfaces ?? []) {
