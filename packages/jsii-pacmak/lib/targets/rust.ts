@@ -3304,15 +3304,15 @@ class RustGenerator extends Generator {
         }
         // For regular enums, use the full path
         if (typeName !== alias) {
-          return `use crate::${namespacePath}::${typeName}::${typeName}::${typeName} as ${alias};`;
+          return `use crate::${namespace}::${typeName}::${typeName}::${typeName} as ${alias};`;
         }
-        return `use crate::${namespacePath}::${typeName}::${typeName}::${typeName};`;
+        return `use crate::${namespace}::${typeName}::${typeName}::${typeName};`;
       }
       // Fallback for unknown types
       if (typeName !== alias) {
-        return `use crate::${namespacePath}::${typeName}::${typeName}::${typeName} as ${alias};`;
+        return `use crate::${namespace}::${typeName}::${typeName}::${typeName} as ${alias};`;
       }
-      return `use crate::${namespacePath}::${typeName}::${typeName}::${typeName};`;
+      return `use crate::${namespace}::${typeName}::${typeName}::${typeName};`;
     }
 
     return null;
@@ -3411,7 +3411,8 @@ class RustGenerator extends Generator {
         return `use crate::${typeName}::{${typeName}::${typeName}, ${typeName}Ref};`;
       } else if (typeInfo?.kind === 'class') {
         // 🚀 Classes: just import the trait
-        return `use crate::${namespacePath}::${typeName}::${typeName}::${typeName};`;
+        // return `use crate::${namespace}::${typeName}::${typeName}::${typeName};`;
+        return `use crate::${typeName}::${typeName}::${typeName};`;
       } else if (typeInfo?.kind === 'enum') {
         // 🚀 Enums: Check if this is a nested enum inside another type
         const parts = fqn.split('.');
