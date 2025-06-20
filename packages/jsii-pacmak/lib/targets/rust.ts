@@ -1351,9 +1351,26 @@ class RustGenerator extends Generator {
       // For unknown external traits, generate a basic implementation
       content.push(`impl ${traitName} for ${cls.name}Impl {`);
       // Search for a type whose FQN ends with .traitName
-      const traitFqn = Object.keys(this.currentAssembly?.types ?? {}).find(
-        (fqn) => fqn.endsWith(`.${traitName}`)
-      );
+      // Search by full trait name
+
+
+      // Try to find the trait FQN in the current assembly or dependencies using the fullTraitName
+      let traitFqn: string | undefined = undefined;
+
+      // First, check current assembly for an exact FQN match
+      if (this.currentAssembly?.types && this.currentAssembly.types[fullTraitName]) {
+        traitFqn = fullTraitName;
+      }
+
+      // If not found in current assembly, search dependencies for an exact FQN match
+      if (!traitFqn) {
+        for (const depAssembly of Object.values(this.depAssemblies)) {
+          if (depAssembly.types && depAssembly.types[fullTraitName]) {
+            traitFqn = fullTraitName;
+            break;
+          }
+        }
+      }
       
       // With this improved version that searches both current assembly and dependencies
       let trait;
@@ -1366,6 +1383,7 @@ class RustGenerator extends Generator {
           // Check if this is likely an external interface based on the FQN
           const assemblyName = traitFqn.split('.')[0]; // Get first segment of FQN
           console.log(`DEBUG: Searching for trait ${traitName} (${traitFqn}) in dependencies...`);
+          console.log(`DEBUG: Class name: ${cls.name}`);
           console.log(`DEBUG: Current assembly: ${this.currentAssembly?.name}`);
           console.log(`DEBUG: Assembly name: ${assemblyName}`);
           console.log(`DEBUG: Dependency assemblies: ${Object.keys(this.depAssemblies).join(', ')}`);
@@ -1392,6 +1410,7 @@ class RustGenerator extends Generator {
           // Check if this is likely an external interface based on the FQN
           // const assemblyName = fullTraitName.split('.')[0]; // Get first segment of FQN
           console.log(`DEBUGG: Searching for trait ${traitName} (${fullTraitName}) in dependencies...`);
+          console.log(`DEBUGG: Class name: ${cls.name}`);
           console.log(`DEBUGG: Current assembly: ${this.currentAssembly?.name}`);
           // console.log(`DEBUGG: Assembly name: ${assemblyName}`);
           console.log(`DEBUGG: Dependency assemblies: ${Object.keys(this.depAssemblies).join(', ')}`);
