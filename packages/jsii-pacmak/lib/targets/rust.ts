@@ -48,8 +48,11 @@ class RustGenerator extends Generator {
   private readonly modFileContents = new Map<string, string[]>(); // Collect content for mod.rs files to prevent overwrites
   private readonly modFileDeclarations = new Map<string, Set<string>>(); // Track what declarations we've added to each mod.rs file
 
+  private depAssemblies: { [depName: string]: Assembly } = {};
+
   protected onBeginAssembly(assm: Assembly, _fingerprint: boolean): void {
     // Store assembly reference
+    this.loadDependencies(assm);
 
     // Store the original assembly name before sanitization for filtering
     const originalAssemblyName = assm.name;
@@ -4741,6 +4744,35 @@ class RustGenerator extends Generator {
         this.collectModFileContent(modFilePath, content);
       }
     }
+  }
+
+  private loadDependencies(assembly: Assembly) {
+    // Load all the dependencies into this.depAssemblies
+    for (const [depName, depVersion] of Object.entries(assembly.dependencies || {})) {
+      const depAssembly = this.findDependencyAssembly(depName, depVersion);
+      if (depAssembly) {
+        this.depAssemblies[depName] = depAssembly;
+        // Recursively load dependencies of dependencies
+        this.loadDependencies(depAssembly);
+      }
+    }
+  }
+
+  findDependencyAssembly(depName: string, depVersion: string) {
+    // Find the dependency assembly in the loaded assemblies
+    // This should match the assembly name and version
+    for (const assembly of Object.values(this.depAssemblies)) {
+      if (
+        assembly.name === depName &&
+        (assembly.version === depVersion ||
+          assembly.version.startsWith(depVersion.replace(/^[^0-9]*/, '')))
+      ) {
+        return assembly;
+      }
+    }
+
+    // If not found, return null
+    return null;
   }
 }
 
