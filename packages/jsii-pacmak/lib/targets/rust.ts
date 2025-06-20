@@ -901,6 +901,7 @@ class RustGenerator extends Generator {
               this.generateExternalTraitImplementation(
                 cls,
                 externalTraitName,
+                superInterface,
                 content,
                 implementedTraits,
               );
@@ -918,6 +919,7 @@ class RustGenerator extends Generator {
               this.generateExternalTraitImplementation(
                 cls,
                 externalTraitName,
+                typeDefinition.base,
                 content,
                 implementedTraits,
               );
@@ -933,6 +935,7 @@ class RustGenerator extends Generator {
               this.generateExternalTraitImplementation(
                 cls,
                 externalTraitName,
+                classInterface,
                 content,
                 implementedTraits,
               );
@@ -1022,6 +1025,7 @@ class RustGenerator extends Generator {
               this.generateExternalTraitImplementation(
                 cls,
                 externalTraitName,
+                superInterface,
                 content,
                 implementedTraits,
               );
@@ -1046,6 +1050,7 @@ class RustGenerator extends Generator {
             this.generateExternalTraitImplementation(
               cls,
               'Operation',
+              'ascopeajsiiacalcalib::Operation',
               content,
               implementedTraits,
             );
@@ -1057,6 +1062,7 @@ class RustGenerator extends Generator {
             this.generateExternalTraitImplementation(
               cls,
               'IFriendly',
+              'ascopeajsiiacalcalib::IFriendly',
               content,
               implementedTraits,
             );
@@ -1067,6 +1073,7 @@ class RustGenerator extends Generator {
             this.generateExternalTraitImplementation(
               cls,
               'Operation',
+              'ascopeajsiiacalcalib::Operation',
               content,
               implementedTraits,
             );
@@ -1077,6 +1084,7 @@ class RustGenerator extends Generator {
             this.generateExternalTraitImplementation(
               cls,
               'Operation',
+              'ascopeajsiiacalcalib::Operation',
               content,
               implementedTraits,
             );
@@ -1090,6 +1098,7 @@ class RustGenerator extends Generator {
       this.generateExternalTraitImplementation(
         cls,
         shortTraitName,
+        traitName,
         content,
         implementedTraits,
       );
@@ -1099,6 +1108,7 @@ class RustGenerator extends Generator {
   private generateExternalTraitImplementation(
     cls: ClassType,
     traitName: string,
+    fullTraitName: string,
     content: string[],
     implementedTraits: Set<string>,
   ): void {
@@ -1135,6 +1145,7 @@ class RustGenerator extends Generator {
       this.generateExternalTraitImplementation(
         cls,
         'NumericValue',
+        fullTraitName,
         content,
         implementedTraits,
       );
@@ -1162,6 +1173,7 @@ class RustGenerator extends Generator {
       this.generateExternalTraitImplementation(
         cls,
         'Base',
+        fullTraitName,
         content,
         implementedTraits,
       );
@@ -1198,6 +1210,7 @@ class RustGenerator extends Generator {
       this.generateExternalTraitImplementation(
         cls,
         'IFriendly',
+        fullTraitName,
         content,
         implementedTraits,
       );
@@ -1224,12 +1237,14 @@ class RustGenerator extends Generator {
       this.generateExternalTraitImplementation(
         cls,
         'IFriendly',
+        fullTraitName,
         content,
         implementedTraits,
       );
       this.generateExternalTraitImplementation(
         cls,
         'IRandomNumberGenerator',
+        fullTraitName,
         content,
         implementedTraits,
       );
@@ -1274,7 +1289,74 @@ class RustGenerator extends Generator {
       const traitFqn = Object.keys(this.currentAssembly?.types ?? {}).find(
         (fqn) => fqn.endsWith(`.${traitName}`)
       );
-      const trait = traitFqn ? this.currentAssembly?.types?.[traitFqn] : undefined;
+      
+      // With this improved version that searches both current assembly and dependencies
+      let trait;
+      if (traitFqn) {
+        // First try to find it in the current assembly
+        trait = this.currentAssembly?.types?.[traitFqn];
+
+        // If not found in current assembly, check in dependencies
+        if (!trait) {
+          // Check if this is likely an external interface based on the FQN
+          const assemblyName = traitFqn.split('.')[0]; // Get first segment of FQN
+          console.log(`DEBUG: Searching for trait ${traitName} (${traitFqn}) in dependencies...`);
+          console.log(`DEBUG: Current assembly: ${this.currentAssembly?.name}`);
+          console.log(`DEBUG: Assembly name: ${assemblyName}`);
+          console.log(`DEBUG: Dependency assemblies: ${Object.keys(this.depAssemblies).join(', ')}`);
+          // If the trait is not from the current assembly, it must be from a dependency
+          // Check if the traitFqn starts with the current assembly name or is a dependency
+          // This is a more robust check to ensure we find the right trait
+          
+          // Look in loaded dependency assemblies
+          for (const [depName, depAssembly] of Object.entries(this.depAssemblies)) {
+            // if (traitFqn.startsWith(`${depName}.`) || assemblyName === depName) {
+              // This is from a dependency - look for the type there
+              if (depAssembly.types && traitFqn in depAssembly.types) {
+                trait = depAssembly.types[traitFqn];
+                break;
+              }
+            // }
+          }
+        }
+      } else {
+        console.log(`DEBUGG: Trait ${traitName} not found in current assembly, searching dependencies...`);
+
+        // If not found in current assembly, check in dependencies
+        if (!trait) {
+          // Check if this is likely an external interface based on the FQN
+          // const assemblyName = fullTraitName.split('.')[0]; // Get first segment of FQN
+          console.log(`DEBUGG: Searching for trait ${traitName} (${fullTraitName}) in dependencies...`);
+          console.log(`DEBUGG: Current assembly: ${this.currentAssembly?.name}`);
+          // console.log(`DEBUGG: Assembly name: ${assemblyName}`);
+          console.log(`DEBUGG: Dependency assemblies: ${Object.keys(this.depAssemblies).join(', ')}`);
+          // If the trait is not from the current assembly, it must be from a dependency
+          // Check if the traitFqn starts with the current assembly name or is a dependency
+          // This is a more robust check to ensure we find the right trait
+          
+          // Look in loaded dependency assemblies
+          for (const [depName, depAssembly] of Object.entries(this.depAssemblies)) {
+            // if (fullTraitName.startsWith(`${depName}.`) || assemblyName === depName) {
+            // if (fullTraitName.startsWith(`${depName}.`)) {
+              // This is from a dependency - look for the type there
+              if (depAssembly.types) {
+                // Search by ends with traitName
+                const fullTraitName = Object.keys(depAssembly.types).find(
+                  (fqn) => fqn.endsWith(`.${traitName}`)
+                );
+                console.log(`DEBUG: Found full trait name ${fullTraitName} in dependency ${depName}`);
+                if (fullTraitName) {
+                // console.log(`DEBUG: Found trait ${traitName} in dependency ${depName}`);
+                // Use the full FQN from the dependency 
+                  trait = depAssembly.types[fullTraitName];
+                  break;
+                }
+              }
+            // }
+          }
+        }
+      }
+
       if (trait && trait.kind != TypeKind.Enum) {
         for (const prop of trait.properties ?? []) {
           const rustType = this.toRustType(prop.type);
@@ -1324,16 +1406,53 @@ class RustGenerator extends Generator {
 
           // const subtraitRaw = (trait as ClassType).base;
           let supertraitReal = subtrait && this.currentAssembly?.types?.[subtrait] ? subtrait : undefined;
+
+          // If not found in current assembly, check in dependencies
           if (!supertraitReal && subtrait) {
-            // fallback: search by suffix if not found directly
+            // First try fallback search by suffix in current assembly
             supertraitReal = Object.keys(this.currentAssembly?.types ?? {}).find(
               (fqn) => fqn.endsWith(`.${subtrait}`)
             );
+            
+            // If still not found, search in dependency assemblies
+            if (!supertraitReal) {
+              for (const [depName, depAssembly] of Object.entries(this.depAssemblies)) {
+                if (depAssembly.types && subtrait in depAssembly.types) {
+                  // Found in dependency - use full FQN
+                  supertraitReal = subtrait;
+                  break;
+                }
+                
+                // Try suffix search in dependency
+                const inDep = Object.keys(depAssembly.types || {}).find(
+                  (fqn) => fqn.endsWith(`.${subtrait}`)
+                );
+                if (inDep) {
+                  supertraitReal = inDep;
+                  break;
+                }
+              }
+            }
           }
 
-          let supertraitFqn = supertraitReal && this.currentAssembly?.types?.[supertraitReal] ? supertraitReal : undefined;
+          // Then we need to get the type, but we need to look in both current assembly and dependencies
+          let supertraitFqn = supertraitReal;
+          let supertraitType;
 
-          let supertraitType = supertraitFqn ? this.currentAssembly?.types?.[supertraitFqn] : undefined;
+          if (supertraitFqn) {
+            // First try current assembly
+            supertraitType = this.currentAssembly?.types?.[supertraitFqn];
+            
+            // If not found, look in dependencies
+            if (!supertraitType) {
+              for (const depAssembly of Object.values(this.depAssemblies)) {
+                if (depAssembly.types && supertraitFqn in depAssembly.types) {
+                  supertraitType = depAssembly.types[supertraitFqn];
+                  break;
+                }
+              }
+            }
+          }
 
           if (supertraitType && (supertraitType.kind === TypeKind.Class || supertraitType.kind === TypeKind.Interface)) {
               if (!implementedTraits.has(interfaceName)) {
@@ -1394,20 +1513,50 @@ class RustGenerator extends Generator {
 
         const baseFqnRaw = (trait as ClassType).base;
         let baseFqn = baseFqnRaw && this.currentAssembly?.types?.[baseFqnRaw] ? baseFqnRaw : undefined;
+        
         if (!baseFqn && baseFqnRaw) {
-          // fallback: search by suffix if not found directly
+          // First, fallback: search by suffix if not found directly in current assembly
           baseFqn = Object.keys(this.currentAssembly?.types ?? {}).find(
             (fqn) => fqn.endsWith(`.${baseFqnRaw}`)
           );
+          
+          // If still not found, search in dependency assemblies
+          if (!baseFqn) {
+            for (const [depName, depAssembly] of Object.entries(this.depAssemblies)) {
+              if (depAssembly.types && baseFqnRaw in depAssembly.types) {
+                baseFqn = baseFqnRaw;
+                break;
+              }
+              
+              // Try suffix search in dependency
+              const inDep = Object.keys(depAssembly.types || {}).find(
+                (fqn) => fqn.endsWith(`.${baseFqnRaw}`)
+              );
+              if (inDep) {
+                baseFqn = inDep;
+                break;
+              }
+            }
+          }
         }
 
         // content.push(`// HERE baseFqn = ${baseFqn}`);      
 
         if (baseFqn) {
-          // content.push(`// HERE baseFqn = ${baseFqn}`);      
-          const base = this.currentAssembly?.types?.[baseFqn];
+          // First look in the current assembly
+          let base = this.currentAssembly?.types?.[baseFqn];
+          
+          // If not found in current assembly, check in dependencies
+          if (!base) {
+            for (const depAssembly of Object.values(this.depAssemblies)) {
+              if (depAssembly.types && baseFqn in depAssembly.types) {
+                base = depAssembly.types[baseFqn];
+                break;
+              }
+            }
+          }
+          
           if (base && base.kind != 'enum' && !implementedTraits.has(base.name)) {
-            
             implementedTraits.add(base.name);
             content.push(`impl ${base.name} for ${cls.name}Impl {`);
 
@@ -1466,14 +1615,52 @@ class RustGenerator extends Generator {
               // Find interface by FQN
               // Find raw supertrait name
               let supertraitFqn = supertrait && this.currentAssembly?.types?.[supertrait] ? supertrait : undefined;
+              
+              // If not found in current assembly, check in dependencies
               if (!supertraitFqn && supertrait) {
-                // fallback: search by suffix if not found directly
+                // First try fallback search by suffix in current assembly
                 supertraitFqn = Object.keys(this.currentAssembly?.types ?? {}).find(
                   (fqn) => fqn.endsWith(`.${supertrait}`)
                 );
+                
+                // If still not found, search in dependency assemblies
+                if (!supertraitFqn) {
+                  for (const [depName, depAssembly] of Object.entries(this.depAssemblies)) {
+                    if (depAssembly.types && supertrait in depAssembly.types) {
+                      supertraitFqn = supertrait;
+                      break;
+                    }
+                    
+                    // Try suffix search in dependency
+                    const inDep = Object.keys(depAssembly.types || {}).find(
+                      (fqn) => fqn.endsWith(`.${supertrait}`)
+                    );
+                    if (inDep) {
+                      supertraitFqn = inDep;
+                      break;
+                    }
+                  }
+                }
               }
-            
-              const supertraitType = supertraitFqn ? this.currentAssembly?.types?.[supertraitFqn] : undefined;
+              
+              // Then we need to get the type, but we need to look in both current assembly and dependencies
+              let supertraitType;
+              
+              if (supertraitFqn) {
+                // First try current assembly
+                supertraitType = this.currentAssembly?.types?.[supertraitFqn];
+                
+                // If not found, look in dependencies
+                if (!supertraitType) {
+                  for (const depAssembly of Object.values(this.depAssemblies)) {
+                    if (depAssembly.types && supertraitFqn in depAssembly.types) {
+                      supertraitType = depAssembly.types[supertraitFqn];
+                      break;
+                    }
+                  }
+                }
+              }
+              
               if (
                 supertraitType &&
                 (supertraitType.kind === TypeKind.Class || supertraitType.kind === TypeKind.Interface)
@@ -4747,32 +4934,62 @@ class RustGenerator extends Generator {
   }
 
   private loadDependencies(assembly: Assembly) {
+    console.log(`Loading dependencies for ${assembly.name}`);
+    
     // Load all the dependencies into this.depAssemblies
     for (const [depName, depVersion] of Object.entries(assembly.dependencies || {})) {
-      const depAssembly = this.findDependencyAssembly(depName, depVersion);
-      if (depAssembly) {
-        this.depAssemblies[depName] = depAssembly;
-        // Recursively load dependencies of dependencies
-        this.loadDependencies(depAssembly);
+      console.log(`Looking for dependency: ${depName} @ ${depVersion}`);
+      
+      // Try to find the .jsii file for the dependency
+      const depPath = this.findDependencyJsiiFile(depName);
+      if (depPath) {
+        try {
+          const depContent = fs.readFileSync(depPath, 'utf-8');
+          const depAssembly = JSON.parse(depContent) as Assembly;
+          console.log(`✅ Loaded dependency: ${depName} (${depAssembly.version})`);
+          this.depAssemblies[depName] = depAssembly;
+          
+          // Recursively load dependencies of dependencies
+          this.loadDependencies(depAssembly);
+        } catch (error) {
+          console.error(`❌ Failed to load dependency ${depName}: ${error}`);
+        }
+      } else {
+        console.warn(`⚠️ Could not find .jsii file for dependency: ${depName}`);
       }
     }
   }
 
-  findDependencyAssembly(depName: string, depVersion: string) {
-    // Find the dependency assembly in the loaded assemblies
-    // This should match the assembly name and version
-    for (const assembly of Object.values(this.depAssemblies)) {
-      if (
-        assembly.name === depName &&
-        (assembly.version === depVersion ||
-          assembly.version.startsWith(depVersion.replace(/^[^0-9]*/, '')))
-      ) {
-        return assembly;
+  private findDependencyJsiiFile(depName: string): string | undefined {
+    // Common paths where .jsii files might be located
+    const possiblePaths = [
+      `/jsii/packages/${depName}/.jsii`,
+      `/jsii/node_modules/${depName}/.jsii`,
+      `/jsii/packages/jsii-calc/node_modules/${depName}/.jsii`,
+      // `/jsii/packages/@scope/jsii-calc-base/.jsii`,
+      // `/jsii/packages/@scope/jsii-calc-base-of-base/.jsii`,
+      // `/jsii/packages/@scope/jsii-calc-lib/.jsii`,
+      // Add more potential paths as needed
+    ];
+    
+    // Handle scoped packages
+    if (depName.startsWith('@')) {
+      // Transform @scope/package to scope/package for path
+      const scopedPath = depName.substring(1).replace('/', '/');
+      possiblePaths.push(
+        `/jsii/packages/${scopedPath}/.jsii`,
+        `/jsii/node_modules/${scopedPath}/.jsii`,
+        `/jsii/packages/jsii-calc/node_modules/${scopedPath}/.jsii`
+      );
+    }
+    
+    for (const path of possiblePaths) {
+      if (fs.existsSync(path)) {
+        return path;
       }
     }
-
-    // If not found, return null
-    return null;
+    
+    return undefined;
   }
 }
 
