@@ -573,14 +573,16 @@ class RustGenerator extends Generator {
     const supertraits: string[] = [];
 
     if (cls.base) {
-      const baseTypeName = cls.base.split('.').pop() ?? cls.base;
-      supertraits.push(baseTypeName);
+      // const baseTypeName = cls.base.split('.').pop() ?? cls.base;
+      // supertraits.push(baseTypeName);
+      supertraits.push(cls.base);
     }
 
     if (cls.interfaces) {
       for (const iface of cls.interfaces) {
-        const ifaceName = iface.split('.').pop() ?? iface;
-        supertraits.push(ifaceName);
+        // const ifaceName = iface.split('.').pop() ?? iface;
+        // supertraits.push(ifaceName);
+        supertraits.push(iface);
       }
     }
 
@@ -593,8 +595,11 @@ class RustGenerator extends Generator {
     // );
     // // content.push(`pub trait ${className}${supertraitClause} {`);
     // content.push(`pub trait ${className} {`);
+
+    // shortName for supertraits
+    const supertraitNames = supertraits.map((s) => s.split('.').pop() ?? s);
     const supertraitClause =
-      supertraits.length > 0 ? `: ${supertraits.join(' + ')}` : '';
+      supertraitNames.length > 0 ? `: ${supertraitNames.join(' + ')}` : '';
 
     content.push(
       `/// ${cls.abstract ? 'Abstract' : 'Concrete'} class trait for ${className}`,
@@ -820,6 +825,9 @@ class RustGenerator extends Generator {
     content: string[],
     implementedTraits: Set<string>,
   ): void {
+
+    console.log(`DEBUG: generateTraitImplementationsRecursive for ${cls.name} with trait ${traitName}`);
+    
     // If already implemented, skip to avoid duplicates
     const shortName = traitName.split('.').pop() ?? traitName;
     if (implementedTraits.has(traitName) || implementedTraits.has(shortName)) {
@@ -856,11 +864,11 @@ class RustGenerator extends Generator {
         if (typeDefinition.kind === TypeKind.Interface) {
           // For interfaces, implement all super-interfaces
           for (const superInterface of typeDefinition.interfaces ?? []) {
-            const superTraitName =
-              superInterface.split('.').pop() ?? superInterface;
+            // const superTraitName =
+            //   superInterface.split('.').pop() ?? superInterface;
             this.generateTraitImplementationsRecursive(
               cls,
-              superTraitName,
+              superInterface,
               content,
               implementedTraits,
             );
@@ -898,6 +906,9 @@ class RustGenerator extends Generator {
             if (isExternalSupertrait) {
               const externalTraitName =
                 superInterface.split('.').pop() ?? superInterface;
+
+              console.log(`DEBUG: fullTawdawdraitName=${superInterface}`);
+
               this.generateExternalTraitImplementation(
                 cls,
                 externalTraitName,
@@ -916,6 +927,9 @@ class RustGenerator extends Generator {
             if (isExternalBase) {
               const externalTraitName =
                 typeDefinition.base.split('.').pop() ?? typeDefinition.base;
+
+              console.log(`DEBUGdddaaa: fullTraitName=${typeDefinition.base}`);
+
               this.generateExternalTraitImplementation(
                 cls,
                 externalTraitName,
@@ -932,6 +946,8 @@ class RustGenerator extends Generator {
             if (isExternalInterface) {
               const externalTraitName =
                 classInterface.split('.').pop() ?? classInterface;
+
+              console.log(`DEBUG: fulawawdlTraitName=${classInterface}`);
               this.generateExternalTraitImplementation(
                 cls,
                 externalTraitName,
@@ -1022,6 +1038,10 @@ class RustGenerator extends Generator {
             ) {
               const externalTraitName =
                 superInterface.split('.').pop() ?? superInterface;
+
+              console.log(
+                `DEBUG: fullTraitName=${superInterface}, cls.name=${cls.name}`,
+              );
               this.generateExternalTraitImplementation(
                 cls,
                 externalTraitName,
@@ -1068,6 +1088,9 @@ class RustGenerator extends Generator {
             );
           }
         } else if (shortTraitName === 'UnaryOperation') {
+          console.log(
+            `DEBUG: Applying UnaryOperation explicit fix for ${cls.name}`,
+          );
           // UnaryOperation extends Operation from external assembly
           if (!implementedTraits.has('Operation')) {
             this.generateExternalTraitImplementation(
@@ -1079,8 +1102,14 @@ class RustGenerator extends Generator {
             );
           }
         } else if (shortTraitName === 'CompositeOperation') {
+          console.log(
+            `DEBUG: Applying CompositeOperation explicit fix for ${cls.name}`,
+          );
           // CompositeOperation extends Operation from external assembly
           if (!implementedTraits.has('Operation')) {
+            console.log(
+              `DEBUG: Adding Operation implementation for ${cls.name}`,
+            );
             this.generateExternalTraitImplementation(
               cls,
               'Operation',
@@ -1095,6 +1124,12 @@ class RustGenerator extends Generator {
       // Handle external assembly traits (like Operation from @scope/jsii-calc-lib)
       // Extract short name for external trait processing
       const shortTraitName = traitName.split('.').pop() ?? traitName;
+
+      console.log(
+        `DEBUGs: Generating external trait implementation for ${cls.name} implementing ${shortTraitName}`,
+      );
+      console.log(`DEBUG: ccccfullTraitName=${traitName}`);
+
       this.generateExternalTraitImplementation(
         cls,
         shortTraitName,
@@ -1113,18 +1148,19 @@ class RustGenerator extends Generator {
     implementedTraits: Set<string>,
   ): void {
     // Handle known external traits with specific implementations
-    if (traitName === 'Base') {
-      // Base trait from @scope/jsii-calc-base
-      content.push(
-        `impl ascopeajsiiacalcabase::Base::Base::Base for ${cls.name}Impl {`,
-      );
-      content.push(`    fn typeName(&self) -> Box<dyn std::any::Any> {`);
-      content.push(`        todo!("Implement method2 typeName")`);
-      content.push(`    }`);
-      content.push('}');
-      content.push('');
-      implementedTraits.add(traitName);
-    } else if (traitName === 'Operation') {
+    // if (traitName === 'Base') {
+    //   // Base trait from @scope/jsii-calc-base
+    //   content.push(
+    //     `impl ascopeajsiiacalcabase::Base::Base::Base for ${cls.name}Impl {`,
+    //   );
+    //   content.push(`    fn typeName(&self) -> Box<dyn std::any::Any> {`);
+    //   content.push(`        todo!("Implement method2 typeName")`);
+    //   content.push(`    }`);
+    //   content.push('}');
+    //   content.push('');
+    //   implementedTraits.add(traitName);
+    // } else
+    if (traitName === 'Operation') {
       // Operation trait from @scope/jsii-calc-lib
       const currentAssemblyName = this.currentAssembly?.name ?? '';
       const traitPrefix =
@@ -1142,6 +1178,9 @@ class RustGenerator extends Generator {
       implementedTraits.add(traitName);
 
       // Operation extends NumericValue, so recursively implement that too
+      console.log(
+        `DEBUG: Recursively implementing NumericValue for ${cls.name}Impl`,
+      );
       this.generateExternalTraitImplementation(
         cls,
         'NumericValue',
@@ -1169,7 +1208,14 @@ class RustGenerator extends Generator {
       content.push('');
       implementedTraits.add(traitName);
 
+
       // NumericValue extends Base, so recursively implement that too
+      console.log(
+        `DEBUG: Recursively implementing Base for ${cls.name}Impl`,
+      );
+      console.log(`DEBUG: fullTraitName=${fullTraitName}`);
+      // Use the full trait name to ensure
+    
       this.generateExternalTraitImplementation(
         cls,
         'Base',
@@ -1206,6 +1252,8 @@ class RustGenerator extends Generator {
       content.push('');
       implementedTraits.add(traitName);
 
+      console.log(`DEBUGaaa: fullTraitName=${fullTraitName}`);
+
       // IFriendlier extends IFriendly
       this.generateExternalTraitImplementation(
         cls,
@@ -1233,6 +1281,9 @@ class RustGenerator extends Generator {
       content.push('');
       implementedTraits.add(traitName);
 
+
+      console.log(`DEBUGaaa: fullTraitName=${fullTraitName}`);
+
       // Recursively implement parent traits
       this.generateExternalTraitImplementation(
         cls,
@@ -1241,6 +1292,8 @@ class RustGenerator extends Generator {
         content,
         implementedTraits,
       );
+      console.log(`DEBUGawfawf: fullTraitName=${fullTraitName}`);
+
       this.generateExternalTraitImplementation(
         cls,
         'IRandomNumberGenerator',
@@ -1283,6 +1336,15 @@ class RustGenerator extends Generator {
       content.push('');
       implementedTraits.add(traitName);
     } else {
+      
+      // const imports = this.getImportsForType(ifc);
+      // for (const importStmt of imports) {
+      //   content.push(importStmt);
+      // }
+      // if (imports.length > 0) {
+      //   content.push('');
+      // }
+
       // For unknown external traits, generate a basic implementation
       content.push(`impl ${traitName} for ${cls.name}Impl {`);
       // Search for a type whose FQN ends with .traitName
@@ -3581,7 +3643,10 @@ class RustGenerator extends Generator {
     if (
       fqn.startsWith('@scope/jsii-calc-lib.') ||
       fqn.startsWith('@scope/jsii-calc-base.') ||
-      fqn.startsWith('@scope/jsii-calc-base-of-base.')
+      fqn.startsWith('@scope/jsii-calc-base-of-base.') || 
+      fqn.startsWith('ascopeajsiiacalcalib.') ||
+      fqn.startsWith('ascopeajsiiacalcabase.') ||
+      fqn.startsWith('ascopeajsiiacalcabaseaofabase.')
     ) {
       const parts = fqn.split('.');
       const typeName = parts[parts.length - 1];
@@ -3753,7 +3818,10 @@ class RustGenerator extends Generator {
     if (
       fqn.startsWith('@scope/jsii-calc-lib.') ||
       fqn.startsWith('@scope/jsii-calc-base.') ||
-      fqn.startsWith('@scope/jsii-calc-base-of-base.')
+      fqn.startsWith('@scope/jsii-calc-base-of-base.') ||
+      fqn.startsWith('ascopeajsiiacalcalib.') ||
+      fqn.startsWith('ascopeajsiiacalcabase.') ||
+      fqn.startsWith('ascopeajsiiacalcabaseaofabase.')
     ) {
       const parts = fqn.split('.');
       const typeName = parts[parts.length - 1];
