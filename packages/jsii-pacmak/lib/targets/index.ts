@@ -11,7 +11,7 @@ import { Golang } from './go';
 import { JavaBuilder } from './java';
 import JavaScript from './js';
 import Python from './python';
-import Rust from './rust';
+import { Rust } from './rust';
 
 export enum TargetName {
   DOTNET = 'dotnet',
