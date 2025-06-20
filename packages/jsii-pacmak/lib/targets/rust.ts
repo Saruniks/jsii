@@ -1571,6 +1571,24 @@ class RustGenerator extends Generator {
                   content.push(`        todo!("Implement method for ${interfaceName}")`);
                   content.push(`    }`);
                 }
+
+                for (const prop of supertraitType.properties ?? []) {
+                  const rustType = this.toRustType(prop.type);
+                  const rustName = reservedWords(prop.name);
+                  content.push(`    fn get_${rustName}(&self) -> ${rustType} {`);
+                  content.push(`        todo!("Implement getter for ${prop.name}")`);
+                  content.push(`    }`);
+
+                  if (!prop.immutable) {
+                    content.push(
+                      `    fn set_${rustName}(&mut self, value: ${rustType}) {`,
+                    );
+                    content.push(
+                      `        todo!("Implement setter for ${prop.name}")`,
+                    );
+                    content.push(`    }`);
+                  }
+                }
                 content.push(`    }`);
               }
             }
