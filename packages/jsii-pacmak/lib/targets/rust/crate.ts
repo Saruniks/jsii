@@ -51,10 +51,21 @@ export class Crate extends RustModule {
     code.line(`name = "${this.moduleName}"`);
     code.line(`version = "${this.assembly.version}"`);
     code.line(`edition = "2024"`);
-    code.line('');
+
+    if (this.assembly.dependencies.length > 0) {
+      code.line('');
+      code.line(`[dependencies]`);
+      for (const dep of this.assembly.dependencies) {
+        let depName = dep.assembly.name.replace(/[@/]/g, '-');
+        depName = depName.replace(/^[^a-zA-Z]+/, '');
+
+        code.line(`${depName} = { version = "${dep.version}", path = "../${depName}" }`);
+      }
+    }
 
     // Add features for sub-crates
     if (this.subCrates.length > 0) {
+      code.line('');
       code.line(`[features]`);
       code.line(`default = [`);
       for (const subCrate of this.subCrates) {
