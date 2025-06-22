@@ -1,20 +1,23 @@
 import { CodeMaker } from "codemaker";
-import { Assembly, ModuleLike } from "jsii-reflect";
+import { Assembly, ModuleLike, Type } from "jsii-reflect";
+import { RustEnum, RustStruct, RustTrait } from "./types";
 
 export abstract class RustModule {
   public readonly moduleName: string;
+  // public readonly types: Type[];
 
-  protected readonly subCrates: RustSubmodule[] = [];
+  protected readonly jsiiModule: ModuleLike;
+  protected readonly subCrates: RustSubmodule[];
 
   constructor(jsiiModule: ModuleLike, modulesPath?: string) {
-    // make snake case from FQN
     let moduleName = jsiiModule.fqn.split('.').pop()!.replace(/([a-z])([A-Z])/g, '$1_$2').toLowerCase();
 
     moduleName = moduleName.replace(/[@/]/g, '-');
     moduleName = moduleName.replace(/^[^a-zA-Z]+/, '');
 
     this.moduleName = moduleName;
-
+    this.jsiiModule = jsiiModule;
+    
     this.subCrates = jsiiModule.submodules.map(
       (submodule) => {
         return new RustSubmodule(submodule, modulesPath);
@@ -118,6 +121,33 @@ export class RustSubmodule extends RustModule {
     for (const subCrate of this.subCrates) {
       code.line(`pub mod ${subCrate.moduleName};`);
     }
+
+    for (const type of this.jsiiModule.types) {
+      // if (type.isInterfaceType() && type.datatype) { // java-like rust struct?
+      //   // return new RustStruct(this, type);
+      //   code.line(`// TODO: Handle interface type ${type.name} with datatype`);
+      //   continue;
+      //   // return new Struct(this, type);
+      if (type.isInterfaceType()) { // pure rust trait possible?
+        const trait = new RustTrait(type);
+        trait.emit(code);
+        continue;
+        // return new GoInterface(this, type);
+      } else if (type.isClassType()) { // java-like struct
+        const struct = new RustStruct(type);
+        struct.emit(code);
+        continue;
+      } else if (type.isEnumType()) {
+        const rustEnum = new RustEnum(type);
+        rustEnum.emit(code);
+        continue;
+      }
+      
+      throw new Error(
+        `Type: ${type.name} with kind ${type.kind} is not a supported type by jsii-pacmak for Rust.`
+      );
+    }
+
     code.closeFile(`${this.submodulesPath}.rs`);
   }
 }

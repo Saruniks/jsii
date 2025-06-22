@@ -39,7 +39,6 @@ export class Golang extends Target {
 
     // write `local.go.mod` with "replace" directives for local modules
     const localGoMod = await this.writeLocalGoMod(pkgDir);
-
     try {
       // run `go build` with local.go.mod, go 1.16+ requires that we download
       // modules explicit so go.sum is updated. We'd want to use
