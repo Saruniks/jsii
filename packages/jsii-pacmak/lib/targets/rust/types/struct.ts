@@ -1,7 +1,7 @@
 import { CodeMaker } from "codemaker";
 import { ClassType } from "jsii-reflect"
 import { RustType } from "../rust-type";
-import { makeRustProperty } from "./property";
+import { makeRustProperty } from "./rust-types";
 
 export class RustStruct extends RustType<ClassType> {
   public emit(code: CodeMaker) {
