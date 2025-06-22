@@ -7,8 +7,7 @@ export abstract class RustModule {
   protected readonly subCrates: RustSubmodule[] = [];
 
   constructor(jsiiModule: ModuleLike, modulesPath?: string) {
-    // Change . to / in fqn to match Rust crate structure
-    this.moduleName = jsiiModule.fqn.replace(/\./g, '/');
+    this.moduleName = jsiiModule.fqn.split('.').pop()!;
 
     this.subCrates = jsiiModule.submodules.map(
       (submodule) => {
