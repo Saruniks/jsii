@@ -6,8 +6,8 @@ export class RustTrait extends RustType<InterfaceType> {
     public emit(code: CodeMaker) {
         code.openBlock(`pub trait ${this.type.name}`);
 
-        Object.keys(this.type.getMethods()).forEach((name: string) => {
-            code.openBlock(`fn ${name}(&self)`);
+        Object.values(this.type.getMethods()).forEach((method: Method) => {
+            code.openBlock(`fn ${method.name}(&self)`);
             code.line(`todo!();`);
             code.closeBlock();
         });
