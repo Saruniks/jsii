@@ -10,5 +10,6 @@ export class RustStruct extends RustType<ClassType> {
         code.line(makeRustProperty(property));
     }
     code.closeBlock();
+    code.line();
   }
 }

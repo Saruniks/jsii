@@ -12,5 +12,6 @@ export class RustTrait extends RustType<InterfaceType> {
         });
 
         code.closeBlock();
+        code.line();
     }
 }

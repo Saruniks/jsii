@@ -10,6 +10,7 @@ export class RustEnum extends RustType<EnumType> {
             code.line(`${this.snakeToCamelCase(member.name)},`);
         }
         code.closeBlock();
+        code.line();
     }
 
     private snakeToCamelCase(input: string): string {
