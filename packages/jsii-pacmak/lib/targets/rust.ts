@@ -1,6 +1,6 @@
 import { Assembly } from "jsii-reflect";
 import { IGenerator, Legalese } from "../generator";
-import { Target, TargetOptions } from "../target";
+import { findLocalBuildDirs, Target, TargetOptions } from "../target";
 import { Crate } from "./rust/crate";
 import path = require("path");
 import { CodeMaker } from "codemaker";
@@ -17,12 +17,25 @@ export class Rust extends Target {
 
   public async build(sourceDir: string, outDir: string): Promise<void> {
     await this.copyFiles(sourceDir, outDir);
+
+    // const pkgDir = path.join(outDir, this.generator.rootCrate.moduleName);
+
+    // const dirs = [
+    //   path.dirname(outDir),
+    //   ...(await findLocalBuildDirs(this.packageDir, 'rust')),
+    // ];
+
+    // console.log(`Found dirs:`);
+    // for (const dir of dirs) {
+    //   console.log(`  - ${dir}`);
+    // }  
   }
 }
 
 class RustGenerator implements IGenerator {
+  public rootCrate!: Crate;
+  
   private assembly!: Assembly;
-  private rootCrate!: Crate;
 
   private readonly code = new CodeMaker({
     indentCharacter: ' ',
@@ -43,8 +56,9 @@ class RustGenerator implements IGenerator {
   }
 
   public async save(outdir: string, tarball: string, { license, notice }: Legalese): Promise<any> {
+    await this.code.save(outdir);
+    
     const output = path.join(outdir, this.rootCrate.moduleName);
-    await this.code.save(output);
 
     const jsiiDir = path.join(output, 'jsii');
     await fs.ensureDir(jsiiDir);

@@ -8,7 +8,11 @@ export abstract class RustModule {
 
   constructor(jsiiModule: ModuleLike, modulesPath?: string) {
     // make snake case from FQN
-    const moduleName = jsiiModule.fqn.split('.').pop()!.replace(/([a-z])([A-Z])/g, '$1_$2').toLowerCase();
+    let moduleName = jsiiModule.fqn.split('.').pop()!.replace(/([a-z])([A-Z])/g, '$1_$2').toLowerCase();
+
+    moduleName = moduleName.replace(/[@/]/g, '-');
+    moduleName = moduleName.replace(/^[^a-zA-Z]+/, '');
+
     this.moduleName = moduleName;
 
     this.subCrates = jsiiModule.submodules.map(
