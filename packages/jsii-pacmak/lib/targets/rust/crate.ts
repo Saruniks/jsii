@@ -7,7 +7,9 @@ export abstract class RustModule {
   protected readonly subCrates: RustSubmodule[] = [];
 
   constructor(jsiiModule: ModuleLike, modulesPath?: string) {
-    this.moduleName = jsiiModule.fqn.split('.').pop()!;
+    // make snake case from FQN
+    const moduleName = jsiiModule.fqn.split('.').pop()!.replace(/([a-z])([A-Z])/g, '$1_$2').toLowerCase();
+    this.moduleName = moduleName;
 
     this.subCrates = jsiiModule.submodules.map(
       (submodule) => {
@@ -71,7 +73,7 @@ export class RustSubmodule extends RustModule {
 
   constructor(submodule: ModuleLike, modulesPath?: string) {
     super(submodule, modulesPath);
-    const submodulesPath = submodule.fqn.split('.').slice(1).join('/');
+    const submodulesPath = submodule.fqn.split('.').slice(1).join('/').replace(/([a-z])([A-Z])/g, '$1_$2').toLowerCase();
     this.submodulesPath = `${modulesPath ? modulesPath + '/' : ''}/${submodulesPath}`;
   }
 
