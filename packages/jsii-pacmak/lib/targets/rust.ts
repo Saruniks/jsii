@@ -1,7 +1,7 @@
 import { Assembly } from "jsii-reflect";
 import { IGenerator, Legalese } from "../generator";
 import { Target, TargetOptions } from "../target";
-import { Crate, RootCrate } from "./rust/crate";
+import { Crate } from "./rust/crate";
 import path = require("path");
 import { CodeMaker } from "codemaker";
 import * as fs from 'fs-extra';
@@ -30,7 +30,7 @@ class RustGenerator implements IGenerator {
   });
 
   public generate(_fingerprint: boolean): void {
-    this.rootCrate = new RootCrate(this.assembly);
+    this.rootCrate = new Crate(this.assembly);
     this.rootCrate. emit(this.code);
   }
 
@@ -43,7 +43,7 @@ class RustGenerator implements IGenerator {
   }
 
   public async save(outdir: string, tarball: string, { license, notice }: Legalese): Promise<any> {
-    const output = path.join(outdir, this.rootCrate.crateName);
+    const output = path.join(outdir, this.rootCrate.moduleName);
     await this.code.save(output);
 
     const jsiiDir = path.join(output, 'jsii');
