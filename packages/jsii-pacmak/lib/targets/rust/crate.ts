@@ -51,6 +51,22 @@ export class Crate extends RustModule {
     code.line(`name = "${this.moduleName}"`);
     code.line(`version = "${this.assembly.version}"`);
     code.line(`edition = "2024"`);
+    code.line('');
+
+    // Add features for sub-crates
+    if (this.subCrates.length > 0) {
+      code.line(`[features]`);
+      code.line(`default = [`);
+      for (const subCrate of this.subCrates) {
+        code.line(`    "${subCrate.moduleName}",`);
+      }
+      code.line(`]`);
+
+      for (const subCrate of this.subCrates) {
+        code.line(`"${subCrate.moduleName}" = []`);
+      }
+    }
+
     code.closeFile(`${this.moduleName}/Cargo.toml`);
   }
 
