@@ -37,7 +37,8 @@ export class Crate extends RustModule {
   private readonly assembly: Assembly;
 
   constructor(assembly: Assembly) {
-    const modulesPath = `${assembly.name}/src`;
+    let sanitizedName = assembly.name.replace(/^@/, '').replace(/\//g, '-');
+    const modulesPath = `${sanitizedName}/src`;
     super(assembly, modulesPath);
     this.assembly = assembly;
   }
@@ -105,7 +106,7 @@ export class RustSubmodule extends RustModule {
   constructor(submodule: ModuleLike, modulesPath?: string) {
     super(submodule, modulesPath);
     const submodulesPath = submodule.fqn.split('.').slice(1).join('/').replace(/([a-z])([A-Z])/g, '$1_$2').toLowerCase();
-    this.submodulesPath = `${modulesPath ? modulesPath + '/' : ''}/${submodulesPath}`;
+    this.submodulesPath = modulesPath ? `${modulesPath}/${submodulesPath}` : submodulesPath;
   }
 
   public emit(code: CodeMaker): void {
