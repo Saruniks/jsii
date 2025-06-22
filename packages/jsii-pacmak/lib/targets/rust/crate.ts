@@ -7,11 +7,11 @@ export abstract class RustModule {
   private readonly subCrates: RustSubmodule[] = [];
 
   constructor(jsiiModule: ModuleLike) {
+    // Change . to / in fqn to match Rust crate structure
     this.moduleName = jsiiModule.fqn.replace(/\./g, '/');
 
     this.subCrates = jsiiModule.submodules.map(
       (submodule) => {
-        // Change . to / in fqn to match Rust crate structure
         return new RustSubmodule(submodule);
       }
     );
@@ -32,8 +32,6 @@ export class Crate extends RustModule {
   private readonly assembly: Assembly;
 
   constructor(assembly: Assembly) {
-    // Consider following:
-    // this.crateName = assembly.name.replace(/[^a-zA-Z0-9_]/g, "-");
     super(assembly);
     this.assembly = assembly;
   }
