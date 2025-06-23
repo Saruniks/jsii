@@ -14,6 +14,11 @@ export class RustStruct extends RustType<ClassType> {
         code.line(`todo!();`);
         code.closeBlock();
         code.line();
+
+        code.openBlock(`fn set_${makeRustPropertyName(property.name)}(&mut self, value: ())`);
+        code.line(`todo!();`);
+        code.closeBlock();
+        code.line();
     }
     code.closeBlock();
     code.line();
