@@ -9,6 +9,11 @@ export class RustStruct extends RustType<ClassType> {
     code.line(`pub struct ${this.type.name};`);
     code.line();
     code.openBlock(`impl ${this.type.name}`);
+
+    code.openBlock(`pub fn new() -> Self`);
+    code.line(`Self`);
+    code.closeBlock();
+    code.line();
     for (const property of this.type.ownProperties) {
         code.openBlock(`fn get_${makeRustPropertyName(property.name)}(&self) -> ()`);
         code.line(`todo!();`);
