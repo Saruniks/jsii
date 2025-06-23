@@ -5,6 +5,7 @@ import { CodeMaker } from "codemaker";
 // TODO: Should it be enum variants or jsii-runtime calls?
 export class RustEnum extends RustType<EnumType> {
     public emit(code: CodeMaker) {
+        code.line('#[derive(PartialEq, Debug)]')
         code.openBlock(`pub enum ${this.type.name}`);
         for (const member of this.type.members) {
             code.line(`${this.snakeToCamelCase(member.name)},`);

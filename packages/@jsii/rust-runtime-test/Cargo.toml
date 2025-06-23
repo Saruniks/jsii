@@ -5,3 +5,7 @@ edition = "2024"
 
 [dependencies]
 jsii-rust-runtime = { path = "../jsii-rust-runtime" }
+jsii-calc = { path = "../../../output/rust/jsii-calc" }
+
+[dev-dependencies]
+trybuild = "1.0.105"

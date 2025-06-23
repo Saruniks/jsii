@@ -1,0 +1,7 @@
+error: cannot construct `EnumDispenser` with struct literal syntax due to private fields
+ --> trybuild/uninitializable-struct.rs:4:27
+  |
+4 |     let _enum_dispenser = EnumDispenser {};
+  |                           ^^^^^^^^^^^^^
+  |
+  = note: private field `_private` that was not provided

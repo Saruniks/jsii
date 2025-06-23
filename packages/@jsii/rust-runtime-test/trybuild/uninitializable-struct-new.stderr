@@ -1,0 +1,5 @@
+error[E0599]: no function or associated item named `new` found for struct `EnumDispenser` in the current scope
+ --> trybuild/uninitializable-struct-new.rs:4:42
+  |
+4 |     let _enum_dispenser = EnumDispenser::new();
+  |                                          ^^^ function or associated item not found in `EnumDispenser`

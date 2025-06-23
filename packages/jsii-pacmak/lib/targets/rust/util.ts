@@ -69,6 +69,8 @@ const RESERVED_WORDS: { [word: string]: string } = {
   safe: 'safe_',
   raw: 'raw_',
   gen: 'gen_',
+
+  new: 'new_',
 };
 
 export function substituteReservedWords(name: string): string {
