@@ -97,6 +97,33 @@ export class Crate extends RustModule {
       code.line(`pub mod ${subCrate.moduleName};`);
     }
 
+    for (const type of this.jsiiModule.types) {
+      // if (type.isInterfaceType() && type.datatype) { // java-like rust struct?
+      //   // return new RustStruct(this, type);
+      //   code.line(`// TODO: Handle interface type ${type.name} with datatype`);
+      //   continue;
+      //   // return new Struct(this, type);
+      if (type.isInterfaceType()) { // pure rust trait possible?
+        const trait = new RustTrait(type);
+        trait.emit(code);
+        continue;
+        // return new GoInterface(this, type);
+      } else if (type.isClassType()) { // java-like struct
+        const struct = new RustStruct(type);
+        struct.emit(code);
+        continue;
+      } else if (type.isEnumType()) {
+        const rustEnum = new RustEnum(type);
+        rustEnum.emit(code);
+        continue;
+      }
+      
+      throw new Error(
+        `Type: ${type.name} with kind ${type.kind} is not a supported type by jsii-pacmak for Rust.`
+      );
+    }
+
+
     code.closeFile(`${this.moduleName}/src/lib.rs`);
   }
 }

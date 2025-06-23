@@ -1,9 +1,13 @@
 import { CodeMaker } from "codemaker";
 import { Method } from "jsii-reflect";
 import { makeRustParameter } from "./rust-types";
+import { substituteReservedWords } from "../util";
 
 export function emitMethod(code: CodeMaker, method: Method): void {
-    code.line(`fn ${method.name}(&self,`);
+    const methodName = substituteReservedWords(method.name);
+
+    code.line(`fn ${methodName}(&self,`);
+    
     for (const parameter of method.parameters) {
         code.line(makeRustParameter(parameter));
     }
