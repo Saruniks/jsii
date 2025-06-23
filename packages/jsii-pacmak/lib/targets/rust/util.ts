@@ -71,12 +71,39 @@ const RESERVED_WORDS: { [word: string]: string } = {
   gen: 'gen_',
 };
 
-export function makeRustPropertyName(propertyName: string): string {
-  propertyName = propertyName.replace(/([a-z0-9])([A-Z])/g, '$1_$2');
-  return substituteReservedWords(propertyName.toLowerCase());
-}
-
 export function substituteReservedWords(name: string): string {
   return RESERVED_WORDS[name] || name;
 }
 
+// TODO: Should we continue doing this, use original names, or maybe use access modifiers
+export function makeRustPropertyName(propertyName: string): string {
+  // If the property is all uppercase, preserve it (for constants)
+  if (propertyName === propertyName.toUpperCase()) {
+    return substituteReservedWords(propertyName);
+  }
+  
+  // If already snake_case, preserve it
+  if (propertyName === propertyName.toLowerCase() && propertyName.includes('_')) {
+    return substituteReservedWords(propertyName);
+  }
+  
+  // Handle acronym case (fooBAR → foo_BAR)
+  // Insert underscore between lowercase and uppercase letter runs
+  let result = propertyName.replace(/([a-z0-9])([A-Z][A-Z]+)/g, '$1_$2');
+  
+  // Handle regular camelCase (fooBar → foo_bar)
+  result = result.replace(/([a-z0-9])([A-Z])/g, '$1_$2');
+  
+  // Handle lowercase case (already snake or all lowercase)
+  if (result === result.toLowerCase()) {
+    return substituteReservedWords(result);
+  }
+  
+  // For mixed case, only lowercase the parts that were originally camelCase
+  let parts = result.split('_');
+  parts = parts.map(part => 
+    part === part.toUpperCase() ? part : part.toLowerCase()
+  );
+  
+  return substituteReservedWords(parts.join('_'));
+}
