@@ -8,7 +8,7 @@ export class RustTrait extends RustType<InterfaceType> {
         code.openBlock(`pub trait ${this.type.name}`);
 
         Object.values(this.type.getMethods()).forEach((method: Method) => {
-            emitMethod(code, method);
+            emitMethod(code, method, this.type.assembly.name);
         });
 
         code.closeBlock();
