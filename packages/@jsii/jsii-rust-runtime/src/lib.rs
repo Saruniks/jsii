@@ -172,7 +172,6 @@ impl JsiiRuntime {
     }
 
     /// Call a static method on a JSII class using direct protocol message
-    /// TODO: Do we need a generic for parsing and returning different types?
     pub fn invoke_static(
         fqn: &str,
         method: &str,
@@ -219,13 +218,154 @@ impl JsiiRuntime {
                 } else if let Some(ok) = json.get("ok") {
                     // Extract result from ok.result
                     if let Some(result) = ok.get("result") {
-                        // Return the result part of the response
-                        Ok(result
-                            .get("$jsii.enum")
-                            .expect("Failed to get result from jsii response")
-                            .to_string())
+                        // Convert different types to String
+                        match result {
+                            Value::String(s) => Ok(s.clone()),
+                            Value::Bool(b) => Ok(b.to_string()),
+                            Value::Number(n) => Ok(n.to_string()),
+                            Value::Object(obj) => {
+                                // Handle JSII special objects like enums
+                                if let Some(Value::String(enum_ref)) = obj.get("$jsii.enum") {
+                                    Ok(enum_ref.clone())
+                                } else {
+                                    Ok(serde_json::to_string(obj)
+                                        .unwrap_or_else(|_| "{}".to_string()))
+                                }
+                            }
+                            Value::Array(_) => {
+                                Ok(serde_json::to_string(result)
+                                    .unwrap_or_else(|_| "[]".to_string()))
+                            }
+                            Value::Null => Ok("null".to_string()),
+                        }
                     } else {
                         Err("No result field found in ok response".to_string())
+                    }
+                } else {
+                    Err("No ok field found in response".to_string())
+                }
+            }
+            Err(e) => Err(format!("Failed to parse response: {}", e)),
+        }
+    }
+
+    /// Call an instance method on a JSII object using direct protocol message
+    pub fn invoke(obj_ref: &str, method: &str, args: Option<&[Value]>) -> Result<String, String> {
+        Self::ensure_initialized()?;
+
+        println!(
+            "DEBUG: Calling instance method {}.{} using direct protocol",
+            obj_ref, method
+        );
+
+        // Format the args array as JSON
+        let args_json = if let Some(args) = args {
+            let args_str = args
+                .iter()
+                .map(|a| a.to_string())
+                .collect::<Vec<String>>()
+                .join(",");
+            format!("[{}]", args_str)
+        } else {
+            "[]".to_string()
+        };
+
+        // Create the invoke protocol message
+        let request = format!(
+            r#"{{"api":"invoke","objref":"{}","method":"{}","args":{}}}"#,
+            obj_ref, method, args_json
+        );
+
+        println!("DEBUG: Sending invoke request: {}", request);
+        Self::send_request(&request)?;
+
+        println!("DEBUG: Waiting for invoke response");
+        let response = Self::read_response()?;
+        println!("DEBUG: Got invoke response: {}", response);
+
+        // Parse the response to extract the result or handle errors
+        match serde_json::from_str::<Value>(&response) {
+            Ok(json) => {
+                if let Some(error_msg) = json.get("error") {
+                    let error = error_msg.to_string();
+                    Err(format!("Error calling instance method: {}", error))
+                } else if let Some(ok) = json.get("ok") {
+                    // Extract result from ok.result
+                    if let Some(result) = ok.get("result") {
+                        // Convert different types to String
+                        match result {
+                            Value::String(s) => Ok(s.clone()),
+                            Value::Bool(b) => Ok(b.to_string()),
+                            Value::Number(n) => Ok(n.to_string()),
+                            Value::Object(obj) => {
+                                // Handle JSII special objects like enums
+                                if let Some(Value::String(enum_ref)) = obj.get("$jsii.enum") {
+                                    Ok(enum_ref.clone())
+                                } else {
+                                    Ok(serde_json::to_string(obj)
+                                        .unwrap_or_else(|_| "{}".to_string()))
+                                }
+                            }
+                            Value::Array(_) => {
+                                Ok(serde_json::to_string(result)
+                                    .unwrap_or_else(|_| "[]".to_string()))
+                            }
+                            Value::Null => Ok("null".to_string()),
+                        }
+                    } else {
+                        Err("No result field found in ok response".to_string())
+                    }
+                } else {
+                    Err("No ok field found in response".to_string())
+                }
+            }
+            Err(e) => Err(format!("Failed to parse response: {}", e)),
+        }
+    }
+
+    /// Create a new instance of a JSII class using direct protocol message
+    pub fn create_object(fqn: &str, args: Option<&[Value]>) -> Result<String, String> {
+        Self::ensure_initialized()?;
+
+        println!(
+            "DEBUG: Creating object of type {} using direct protocol",
+            fqn
+        );
+
+        // Format the args array as JSON
+        let args_json = if let Some(args) = args {
+            let args_str = args
+                .iter()
+                .map(|a| a.to_string())
+                .collect::<Vec<String>>()
+                .join(",");
+            format!("[{}]", args_str)
+        } else {
+            "[]".to_string()
+        };
+
+        // Create the create protocol message
+        let request = format!(r#"{{"api":"create","fqn":"{}","args":{}}}"#, fqn, args_json);
+
+        println!("DEBUG: Sending create request: {}", request);
+        Self::send_request(&request)?;
+
+        println!("DEBUG: Waiting for create response");
+        let response = Self::read_response()?;
+        println!("DEBUG: Got create response: {}", response);
+
+        // Parse the response to extract the object reference
+        match serde_json::from_str::<Value>(&response) {
+            Ok(json) => {
+                if let Some(error_msg) = json.get("error") {
+                    let error = error_msg.to_string();
+                    Err(format!("Error creating object: {}", error))
+                } else if let Some(ok) = json.get("ok") {
+                    // Extract object reference from ok.objref
+                    if let Some(objref) = ok.get("objref").and_then(|v| v.as_str()) {
+                        Ok(objref.to_string())
+                    } else {
+                        Err("No objref field found in ok response".to_string())
                     }
                 } else {
                     Err("No ok field found in response".to_string())

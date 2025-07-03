@@ -12,7 +12,10 @@ export class RustStruct extends RustType<ClassType> {
       code.line(`_private: (),`);
       code.closeBlock();
     } else {
-      code.line(`pub struct ${this.type.name};`);
+      code.openBlock(`pub struct ${this.type.name}`);
+      // TODO: Should jsii_object be something else than String?
+      code.line('jsii_object: String');
+      code.closeBlock();
     }
     code.line();
 
@@ -20,7 +23,10 @@ export class RustStruct extends RustType<ClassType> {
 
     if (this.type.initializer) {
       code.openBlock(`pub fn new() -> Self`);
-      code.line(`Self`);
+      code.line(`let jsii_res = jsii_rust_runtime::JsiiRuntime::create_object("${this.type.fqn}", Some(&[])).expect("JsiiRuntiem::create_object panic");`);
+      code.line(`let jsii_object = serde_json::from_str(&jsii_res).expect("Failed to deserialize result");`);
+      code.line(`Self { jsii_object }`);
+      // code.line(`Self`);
       code.closeBlock();
       code.line();
     }
@@ -36,7 +42,14 @@ export class RustStruct extends RustType<ClassType> {
         // }
         code.openBlock(`pub fn get_${makeRustPropertyName(property.name)}(&self) -> ${makeRustReturn(property.type)}`);
 
-        code.line(`todo!();`);
+        if (property.type.primitive === 'boolean') {
+          // invoke the jsii runtime to call the method
+          code.line(`let jsii_res = jsii_rust_runtime::JsiiRuntime::invoke("${this.type.fqn}", "${substituteReservedWords(property.name)}", Some(&[])).expect("JsiiRuntiem::invoke panic");`);
+          code.line(`serde_json::from_str(&jsii_res).expect("Failed to deserialize result")`);
+        } else {
+          code.line(`todo!();`);
+        }
+
         code.closeBlock();
         code.line();
 
@@ -56,6 +69,8 @@ function makeRustReturn(type: any): string {
   } else if (type.primitive === 'number') {
     // return 'f64';
   } else if (type.primitive === 'boolean') {
+    // invoke the jsii runtime to call the method
+    // handle boolean return type
     return 'bool';
   } else if (type.type?.isEnumType()) {
     // // Get the assembly/package name of the current type and the return type
