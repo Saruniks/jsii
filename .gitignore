@@ -17,3 +17,6 @@ coverage/
 jsii-outdir/
 output/
 test-jsii-calc-rs/target/
+.jsii
+.jsii.gz
+.cursor/rules/rust-dbuild.mdc
