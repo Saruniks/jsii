@@ -376,6 +376,55 @@ impl JsiiRuntime {
         }
     }
 
+    /// Set a property value on a JSII object using direct protocol message
+    pub fn set(obj_ref: &str, property: &str, value: &str) -> Result<String, String> {
+        Self::ensure_initialized()?;
+
+        println!(
+            "DEBUG: Setting property {} on objref {} to {} using direct protocol",
+            property, obj_ref, value
+        );
+
+        // Parse the value as JSON to ensure it's properly formatted
+        let value_json = match serde_json::from_str::<Value>(value) {
+            Ok(json_value) => json_value,
+            Err(_) => {
+                // If it's not valid JSON, treat it as a string literal
+                Value::String(value.to_string())
+            }
+        };
+
+        // Create the set protocol message - objref should be wrapped in $jsii.byref object
+        let objref_wrapped = format!(r#"{{"$jsii.byref":"{}"}}"#, obj_ref);
+        let request = format!(
+            r#"{{"api":"set","objref":{},"property":"{}","value":{}}}"#,
+            objref_wrapped, property, value_json
+        );
+
+        println!("DEBUG: Sending set request: {}", request);
+        Self::send_request(&request)?;
+
+        println!("DEBUG: Waiting for set response");
+        let response = Self::read_response()?;
+        println!("DEBUG: Got set response: {}", response);
+
+        // Parse the response to check for errors (set operations typically return ok with no value)
+        match serde_json::from_str::<Value>(&response) {
+            Ok(json) => {
+                if let Some(error_msg) = json.get("error") {
+                    let error = error_msg.to_string();
+                    Err(format!("Error setting property: {}", error))
+                } else if json.get("ok").is_some() {
+                    // Set operation successful, return empty string to indicate success
+                    Ok("".to_string())
+                } else {
+                    Err("No ok field found in response".to_string())
+                }
+            }
+            Err(e) => Err(format!("Failed to parse response: {}", e)),
+        }
+    }
+
     /// Create a new instance of a JSII class using direct protocol message
     pub fn create_object(fqn: &str, args: Option<&[Value]>) -> Result<String, String> {
         Self::ensure_initialized()?;

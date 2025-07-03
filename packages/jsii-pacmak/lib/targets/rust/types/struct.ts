@@ -55,9 +55,7 @@ export class RustStruct extends RustType<ClassType> {
         code.openBlock(`pub fn set_${makeRustPropertyName(property.name)}(&self, value: ${makeRustType(property.type)})`);
 
         if (property.type.primitive === 'boolean' && this.type.initializer) {
-          // invoke the jsii runtime to call the method
           code.line(`let jsii_res = jsii_rust_runtime::JsiiRuntime::set(&self.jsii_object_ref, "${substituteReservedWords(property.name)}", &serde_json::to_string(&value).expect("Failed to serialize value")).expect("JsiiRuntiem::invoke panic");`);
-          code.line(`serde_json::from_str(&jsii_res).expect("Failed to deserialize result");`);
         } else {
           code.line(`todo!();`);
         }
