@@ -310,7 +310,10 @@ impl JsiiRuntime {
     }
 
     /// Get a property value from a JSII object using direct protocol message
-    pub fn get(obj_ref: &str, property: &str) -> Result<String, String> {
+    pub fn get<T>(obj_ref: &str, property: &str) -> Result<T, String>
+    where
+        T: serde::de::DeserializeOwned,
+    {
         Self::ensure_initialized()?;
 
         println!(
@@ -339,37 +342,14 @@ impl JsiiRuntime {
                     let error = error_msg.to_string();
                     Err(format!("Error getting property: {}", error))
                 } else if let Some(ok) = json.get("ok") {
-                    // Extract result from ok.result
+                    // Extract result from ok.value
                     if let Some(result) = ok.get("value") {
-                        // Convert different types to String
-                        match result {
-                            Value::String(s) => {
-                                println!("DEBUG: Deserializing string value: {}", s);
-                                Ok(s.clone())
-                            }
-                            Value::Bool(b) => Ok(b.to_string()),
-                            Value::Number(n) => Ok(n.to_string()),
-                            Value::Object(obj) => {
-                                // Handle JSII special objects like enums or object references
-                                if let Some(Value::String(enum_ref)) = obj.get("$jsii.enum") {
-                                    Ok(enum_ref.clone())
-                                } else if let Some(Value::String(obj_ref)) = obj.get("$jsii.byref")
-                                {
-                                    // Return the object reference for further use
-                                    Ok(obj_ref.clone())
-                                } else {
-                                    Ok(serde_json::to_string(obj)
-                                        .unwrap_or_else(|_| "{}".to_string()))
-                                }
-                            }
-                            Value::Array(_) => {
-                                Ok(serde_json::to_string(result)
-                                    .unwrap_or_else(|_| "[]".to_string()))
-                            }
-                            Value::Null => Ok("null".to_string()),
-                        }
+                        // Try to deserialize the result directly to the target type
+                        serde_json::from_value(result.clone()).map_err(|e| {
+                            format!("Failed to deserialize result to target type: {}", e)
+                        })
                     } else {
-                        Err("No result field found in ok response".to_string())
+                        Err("No value field found in ok response".to_string())
                     }
                 } else {
                     Err("No ok field found in response".to_string())
@@ -377,6 +357,11 @@ impl JsiiRuntime {
             }
             Err(e) => Err(format!("Failed to parse response: {}", e)),
         }
+    }
+
+    /// Get a property value from a JSII object as a String (convenience method)
+    pub fn get_string(obj_ref: &str, property: &str) -> Result<String, String> {
+        Self::get::<String>(obj_ref, property)
     }
 
     /// Set a property value on a JSII object using direct protocol message
