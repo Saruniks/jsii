@@ -43,7 +43,7 @@ export class RustStruct extends RustType<ClassType> {
         // TODO: Handle different property types and static properties
         if (property.type.primitive === 'boolean' && this.type.initializer) {
           // invoke the jsii runtime to call the method
-          code.line(`let jsii_res = jsii_rust_runtime::JsiiRuntime::invoke(&self.jsii_object_ref, "${substituteReservedWords(property.name)}", Some(&[])).expect("JsiiRuntiem::invoke panic");`);
+          code.line(`let jsii_res = jsii_rust_runtime::JsiiRuntime::get(&self.jsii_object_ref, "${substituteReservedWords(property.name)}").expect("JsiiRuntiem::invoke panic");`);
           code.line(`serde_json::from_str(&jsii_res).expect("Failed to deserialize result")`);
         } else {
           code.line(`todo!();`);

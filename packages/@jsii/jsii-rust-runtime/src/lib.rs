@@ -218,26 +218,11 @@ impl JsiiRuntime {
                 } else if let Some(ok) = json.get("ok") {
                     // Extract result from ok.result
                     if let Some(result) = ok.get("result") {
-                        // Convert different types to String
-                        match result {
-                            Value::String(s) => Ok(s.clone()),
-                            Value::Bool(b) => Ok(b.to_string()),
-                            Value::Number(n) => Ok(n.to_string()),
-                            Value::Object(obj) => {
-                                // Handle JSII special objects like enums
-                                if let Some(Value::String(enum_ref)) = obj.get("$jsii.enum") {
-                                    Ok(enum_ref.clone())
-                                } else {
-                                    Ok(serde_json::to_string(obj)
-                                        .unwrap_or_else(|_| "{}".to_string()))
-                                }
-                            }
-                            Value::Array(_) => {
-                                Ok(serde_json::to_string(result)
-                                    .unwrap_or_else(|_| "[]".to_string()))
-                            }
-                            Value::Null => Ok("null".to_string()),
-                        }
+                        // Return the result part of the response
+                        Ok(result
+                            .get("$jsii.enum")
+                            .expect("Failed to get result from jsii response")
+                            .to_string())
                     } else {
                         Err("No result field found in ok response".to_string())
                     }
@@ -302,6 +287,73 @@ impl JsiiRuntime {
                                 // Handle JSII special objects like enums
                                 if let Some(Value::String(enum_ref)) = obj.get("$jsii.enum") {
                                     Ok(enum_ref.clone())
+                                } else {
+                                    Ok(serde_json::to_string(obj)
+                                        .unwrap_or_else(|_| "{}".to_string()))
+                                }
+                            }
+                            Value::Array(_) => {
+                                Ok(serde_json::to_string(result)
+                                    .unwrap_or_else(|_| "[]".to_string()))
+                            }
+                            Value::Null => Ok("null".to_string()),
+                        }
+                    } else {
+                        Err("No result field found in ok response".to_string())
+                    }
+                } else {
+                    Err("No ok field found in response".to_string())
+                }
+            }
+            Err(e) => Err(format!("Failed to parse response: {}", e)),
+        }
+    }
+
+    /// Get a property value from a JSII object using direct protocol message
+    pub fn get(obj_ref: &str, property: &str) -> Result<String, String> {
+        Self::ensure_initialized()?;
+
+        println!(
+            "DEBUG: Getting property {} from objref {} using direct protocol",
+            property, obj_ref
+        );
+
+        // Create the get protocol message - objref should be wrapped in $jsii.byref object
+        let objref_wrapped = format!(r#"{{"$jsii.byref":"{}"}}"#, obj_ref);
+        let request = format!(
+            r#"{{"api":"get","objref":{},"property":"{}"}}"#,
+            objref_wrapped, property
+        );
+
+        println!("DEBUG: Sending get request: {}", request);
+        Self::send_request(&request)?;
+
+        println!("DEBUG: Waiting for get response");
+        let response = Self::read_response()?;
+        println!("DEBUG: Got get response: {}", response);
+
+        // Parse the response to extract the result or handle errors
+        match serde_json::from_str::<Value>(&response) {
+            Ok(json) => {
+                if let Some(error_msg) = json.get("error") {
+                    let error = error_msg.to_string();
+                    Err(format!("Error getting property: {}", error))
+                } else if let Some(ok) = json.get("ok") {
+                    // Extract result from ok.result
+                    if let Some(result) = ok.get("value") {
+                        // Convert different types to String
+                        match result {
+                            Value::String(s) => Ok(s.clone()),
+                            Value::Bool(b) => Ok(b.to_string()),
+                            Value::Number(n) => Ok(n.to_string()),
+                            Value::Object(obj) => {
+                                // Handle JSII special objects like enums or object references
+                                if let Some(Value::String(enum_ref)) = obj.get("$jsii.enum") {
+                                    Ok(enum_ref.clone())
+                                } else if let Some(Value::String(obj_ref)) = obj.get("$jsii.byref")
+                                {
+                                    // Return the object reference for further use
+                                    Ok(obj_ref.clone())
                                 } else {
                                     Ok(serde_json::to_string(obj)
                                         .unwrap_or_else(|_| "{}".to_string()))
