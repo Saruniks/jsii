@@ -3,7 +3,7 @@ import { Method } from "jsii-reflect";
 import { makeRustParameter } from "./rust-types";
 import { makeRustPropertyName, substituteReservedWords } from "../util";
 
-export function emitMethod(code: CodeMaker, method: Method, assemblyName: string): void {
+export function emitMethod(code: CodeMaker, method: Method, fqn: string, assemblyName: string): void {
     let methodName = substituteReservedWords(method.name);
 
     // TODO: Is toString() supposed to be a jsii-runtime call to js or native Rust?
@@ -43,10 +43,15 @@ export function emitMethod(code: CodeMaker, method: Method, assemblyName: string
 
     if (method.static) {
         code.openBlock(`pub fn ${methodName}()${returns || ''}`);
+        // TODO: Invoke the jsii runtime to call the method
+        code.line(`let jsii_res = jsii_rust_runtime::JsiiRuntime::invoke_static("${fqn}", "${method.name}", Some(&[]));`);
+        code.line(`println!("Result: {:?}", jsii_res);`);
+        code.line('todo!();');
     } else {
         code.openBlock(`fn ${methodName}(&self)${returns || ''}`);
-    }
-    code.line(`todo!();`);
+        code.line(`todo!();`);
+    }    
+    
     code.closeBlock();
     code.line();
 }

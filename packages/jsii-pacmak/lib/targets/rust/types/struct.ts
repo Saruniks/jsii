@@ -26,7 +26,7 @@ export class RustStruct extends RustType<ClassType> {
     }
 
     for (const method of this.type.ownMethods) {
-      emitMethod(code, method, this.type.assembly.name);
+      emitMethod(code, method, this.type.fqn, this.type.assembly.name);
     }
 
     for (const property of this.type.ownProperties) {
