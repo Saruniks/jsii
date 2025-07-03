@@ -42,7 +42,7 @@ export class RustStruct extends RustType<ClassType> {
         code.openBlock(`pub fn get_${makeRustPropertyName(property.name)}(&self) -> ${makeRustType(property.type)}`);
 
         // TODO: Handle different property types and static properties
-        if (property.type.primitive && this.type.initializer) {
+        if (this.type.initializer) {
           // invoke the jsii runtime to call the method
           // TODO: Force inference by returning directly the type
           code.line(`jsii_rust_runtime::JsiiRuntime::get(&self.jsii_object_ref, "${substituteReservedWords(property.name)}").expect("JsiiRuntiem::invoke panic")`);
@@ -97,6 +97,12 @@ function makeRustType(type: any): string {
     // return '()';
     return 'chrono::DateTime<chrono::Utc>';
     // Get the assembly/package name of the
+    //TODO:  Handle as a sub-type of json??
+  } else if (type.collection?.kind === 'map') {
+    return `std::collections::HashMap<String, ${makeRustType(type.collection?.elementType || { primitive: 'string' })}>`;
+  } else if (type.collection?.kind === 'array') {
+    // Handle array types
+    return `Vec<${makeRustType(type.collection.elementType)}>`;
   } else if (type.primitive === 'json') {
     return 'serde_json::Value'; 
   } else if (type.type?.isEnumType()) {

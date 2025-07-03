@@ -79,7 +79,7 @@ fn test_get_json_property() {
     // Get empty object
     let res = all_types.get_json_property();
     assert_eq!(res, serde_json::json!({}));
-} // Set new object
+}
 
 #[test]
 fn test_set_json_property() {
@@ -103,4 +103,37 @@ fn test_set_json_property() {
     // And again and check if is the same
     let res = all_types.get_json_property();
     assert_eq!(res, another_new_value);
+}
+
+// Do tests for map:
+
+//   // map
+
+//   private mapValue: { [key: string]: LibNumber } = {};
+
+//   public get mapProperty(): { [key: string]: LibNumber } {
+//     return this.mapValue;
+//   }
+
+//   public set mapProperty(value: { [key: string]: LibNumber }) {
+//     if (typeof value !== 'object') {
+//       throw new Error('not a map');
+//     }
+//     this.mapValue = value;
+//   }
+
+#[test]
+fn test_get_map_property() {
+    let all_types = AllTypes::new();
+    // Get empty map
+    let res = all_types.get_map_property();
+    assert_eq!(res, serde_json::json!({}));
+}
+
+#[test]
+fn test_get_array_property() {
+    let all_types = AllTypes::new();
+    // Get empty array
+    let res = all_types.get_array_property();
+    assert_eq!(res, serde_json::json!([]));
 }
