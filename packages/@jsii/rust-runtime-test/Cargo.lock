@@ -109,6 +109,9 @@ dependencies = [
 [[package]]
 name = "scope-jsii-calc-base-of-base"
 version = "2.1.1"
+dependencies = [
+ "jsii-rust-runtime",
+]
 
 [[package]]
 name = "scope-jsii-calc-lib"

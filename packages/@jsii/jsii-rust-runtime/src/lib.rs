@@ -1,32 +1,65 @@
 use std::io::{BufRead, BufReader, Write};
-use std::process::{Child, ChildStderr, ChildStdin, ChildStdout, Command, Stdio};
+use std::process::{Child, ChildStderr, ChildStdin, ChildStdout, Command};
+use std::sync::{Mutex, OnceLock};
 
 use serde_json::Value;
 
 /// A struct representing a connection to the JSII runtime
-pub struct JsiiRuntime {
+struct JsiiRuntimeInner {
     process: Child,
     stdin: ChildStdin,
     stdout: BufReader<ChildStdout>,
+    #[allow(dead_code)]
     stderr: BufReader<ChildStderr>,
 }
 
+/// Global singleton for JSII runtime
+pub struct JsiiRuntime;
+
+static RUNTIME: OnceLock<Mutex<JsiiRuntimeInner>> = OnceLock::new();
+static INIT_ONCE: std::sync::Once = std::sync::Once::new();
+
 impl JsiiRuntime {
-    /// Create a new JSII runtime connection
-    pub fn new() -> Self {
+    /// Internal method to ensure runtime is initialized
+    fn ensure_initialized() -> Result<(), String> {
+        // Use std::sync::Once to ensure initialization happens only once
+        let mut init_result = Ok(());
+
+        INIT_ONCE.call_once(|| match Self::initialize_runtime() {
+            Ok(_) => println!("JSII runtime initialized successfully"),
+            Err(e) => {
+                println!("Failed to initialize JSII runtime: {}", e);
+                init_result = Err(e);
+            }
+        });
+
+        init_result?;
+
+        // Double-check that runtime is available
+        if RUNTIME.get().is_none() {
+            return Err("Runtime initialization failed".to_string());
+        }
+
+        Ok(())
+    }
+
+    /// Internal method to actually initialize the runtime
+    fn initialize_runtime() -> Result<(), String> {
+        println!("Starting JSII runtime process...");
+
         let mut process = Command::new("node")
             .arg("/home/clear/jsii/packages/@jsii/runtime/bin/jsii-runtime.js")
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
             .spawn()
-            .expect("Failed to start JSII runtime process");
+            .map_err(|e| format!("Failed to start JSII runtime process: {}", e))?;
 
-        let stdin = process.stdin.take().expect("Failed to open stdin");
-        let stdout = BufReader::new(process.stdout.take().expect("Failed to open stdout"));
-        let stderr = BufReader::new(process.stderr.take().expect("Failed to open stderr"));
+        let stdin = process.stdin.take().ok_or("Failed to open stdin")?;
+        let stdout = BufReader::new(process.stdout.take().ok_or("Failed to open stdout")?);
+        let stderr = BufReader::new(process.stderr.take().ok_or("Failed to open stderr")?);
 
-        let mut runtime = Self {
+        let mut runtime_inner = JsiiRuntimeInner {
             process,
             stdin,
             stdout,
@@ -34,14 +67,67 @@ impl JsiiRuntime {
         };
 
         // Read the initial hello message
-        let hello_response = runtime.read_response();
+        println!("Reading initial hello message...");
+        let hello_response = Self::read_response_inner(&mut runtime_inner);
         println!("Hello response: {}", hello_response);
 
-        runtime
+        // Validate the hello response
+        match serde_json::from_str::<Value>(&hello_response) {
+            Ok(json) => {
+                if let Some(hello_msg) = json.get("hello") {
+                    println!("JSII runtime ready: {}", hello_msg);
+                } else {
+                    return Err(format!("Invalid hello response: {}", hello_response));
+                }
+            }
+            Err(e) => {
+                return Err(format!("Failed to parse hello response: {}", e));
+            }
+        }
+
+        RUNTIME
+            .set(Mutex::new(runtime_inner))
+            .map_err(|_| "Failed to set runtime singleton")?;
+
+        // Load all required modules in the correct dependency order
+        println!("Loading JSII modules...");
+
+        // 1. Load base-of-base
+        Self::load_module_internal(
+            "@scope/jsii-calc-base-of-base",
+            "2.1.1",
+            "/home/clear/jsii/output/rust/scope-jsii-calc-base-of-base/jsii/scope-jsii-calc-base-of-base-2.1.1.tgz",
+        )?;
+
+        // 2. Load base
+        Self::load_module_internal(
+            "@scope/jsii-calc-base",
+            "0.0.0",
+            "/home/clear/jsii/output/rust/scope-jsii-calc-base/jsii/scope-jsii-calc-base-0.0.0.tgz",
+        )?;
+
+        // 3. Load lib
+        Self::load_module_internal(
+            "@scope/jsii-calc-lib",
+            "0.0.0",
+            "/home/clear/jsii/output/rust/scope-jsii-calc-lib/jsii/scope-jsii-calc-lib-0.0.0.tgz",
+        )?;
+
+        // 4. Load jsii-calc
+        Self::load_module_internal(
+            "jsii-calc",
+            "3.20.120",
+            "/home/clear/jsii/output/rust/jsii-calc/jsii/jsii-calc-3.20.120.tgz",
+        )?;
+
+        println!("All JSII modules loaded successfully");
+        Ok(())
     }
 
     /// Load a JSII module
-    pub fn load_module(&mut self, name: &str, version: &str, tarball_path: &str) -> String {
+    pub fn load_module(name: &str, version: &str, tarball_path: &str) -> Result<String, String> {
+        Self::ensure_initialized()?;
+
         println!(
             "DEBUG: Loading module {}@{} from {}",
             name, version, tarball_path
@@ -53,10 +139,10 @@ impl JsiiRuntime {
         );
 
         println!("DEBUG: Sending load request: {}", load_request);
-        self.send_request(&load_request);
+        Self::send_request(&load_request)?;
 
         println!("DEBUG: Waiting for load response");
-        let response = self.read_response();
+        let response = Self::read_response()?;
         println!("DEBUG: Got load response: {}", response);
 
         // Parse response to see if it's an error
@@ -72,16 +158,13 @@ impl JsiiRuntime {
         }
 
         println!("DEBUG: Module load complete");
-        response
+        Ok(response)
     }
 
     /// Call a static method on a JSII class using direct protocol message
-    pub fn invoke_static(
-        &mut self,
-        fqn: &str,
-        method: &str,
-        args: Option<&[Value]>,
-    ) -> Result<Value, String> {
+    pub fn invoke_static(fqn: &str, method: &str, args: Option<&[Value]>) -> Result<Value, String> {
+        Self::ensure_initialized()?;
+
         println!(
             "DEBUG: Calling static method {}.{} using direct protocol",
             fqn, method
@@ -106,10 +189,10 @@ impl JsiiRuntime {
         );
 
         println!("DEBUG: Sending sinvoke request: {}", request);
-        self.send_request(&request);
+        Self::send_request(&request)?;
 
         println!("DEBUG: Waiting for sinvoke response");
-        let response = self.read_response();
+        let response = Self::read_response()?;
         println!("DEBUG: Got sinvoke response: {}", response);
 
         // Parse the response to extract the result or handle errors
@@ -135,20 +218,45 @@ impl JsiiRuntime {
     }
 
     /// Legacy method - keeping for compatibility
-    pub fn call_static_method(&mut self, fqn: &str, method: &str) -> Result<Value, String> {
-        self.invoke_static(fqn, method, None)
+    pub fn call_static_method(fqn: &str, method: &str) -> Result<Value, String> {
+        Self::invoke_static(fqn, method, None)
     }
 
     /// Send a request to the JSII runtime
-    fn send_request(&mut self, request: &str) {
+    fn send_request(request: &str) -> Result<(), String> {
+        Self::ensure_initialized()?;
+
         println!("DEBUG: Sending request: {}", request);
-        writeln!(self.stdin, "{}", request).expect("Failed to write request");
-        self.stdin.flush().expect("Failed to flush stdin");
+
+        let runtime = RUNTIME.get().ok_or("Runtime not initialized")?;
+        let mut runtime_guard = runtime
+            .lock()
+            .map_err(|e| format!("Failed to lock runtime: {}", e))?;
+
+        writeln!(runtime_guard.stdin, "{}", request)
+            .map_err(|e| format!("Failed to write request: {}", e))?;
+        runtime_guard
+            .stdin
+            .flush()
+            .map_err(|e| format!("Failed to flush stdin: {}", e))?;
         println!("DEBUG: Request sent and flushed");
+        Ok(())
     }
 
     /// Read a response from the JSII runtime with a simple timeout
-    fn read_response(&mut self) -> String {
+    fn read_response() -> Result<String, String> {
+        Self::ensure_initialized()?;
+
+        let runtime = RUNTIME.get().ok_or("Runtime not initialized")?;
+        let mut runtime_guard = runtime
+            .lock()
+            .map_err(|e| format!("Failed to lock runtime: {}", e))?;
+
+        Ok(Self::read_response_inner(&mut *runtime_guard))
+    }
+
+    /// Internal helper for reading responses
+    fn read_response_inner(runtime: &mut JsiiRuntimeInner) -> String {
         // Use a simplier approach without non-blocking IO
         let mut response = String::new();
         println!("DEBUG: Reading response from JSII runtime...");
@@ -158,24 +266,33 @@ impl JsiiRuntime {
         use std::time::{Duration, Instant};
         let timeout_duration = Duration::from_secs(10); // 10 seconds timeout
         let start_time = Instant::now();
-        
+
         // Try a few times with timeouts
         let mut attempts = 0;
         const MAX_ATTEMPTS: i32 = 3;
-        
+
         while attempts < MAX_ATTEMPTS {
             attempts += 1;
-            
+
             if start_time.elapsed() > timeout_duration {
-                println!("DEBUG: Timeout reading response after {} seconds", timeout_duration.as_secs());
-                return format!("ERROR: Timeout after {} seconds", timeout_duration.as_secs());
+                println!(
+                    "DEBUG: Timeout reading response after {} seconds",
+                    timeout_duration.as_secs()
+                );
+                return format!(
+                    "ERROR: Timeout after {} seconds",
+                    timeout_duration.as_secs()
+                );
             }
-            
-            match self.stdout.read_line(&mut response) {
+
+            match runtime.stdout.read_line(&mut response) {
                 Ok(n) => {
                     println!("DEBUG: Read {} bytes", n);
                     if n == 0 {
-                        println!("DEBUG: EOF reached, no data available, attempt {}/{}", attempts, MAX_ATTEMPTS);
+                        println!(
+                            "DEBUG: EOF reached, no data available, attempt {}/{}",
+                            attempts, MAX_ATTEMPTS
+                        );
                         if attempts >= MAX_ATTEMPTS {
                             return "EOF: No data available after multiple attempts".to_string();
                         }
@@ -192,39 +309,45 @@ impl JsiiRuntime {
                 }
             }
         }
-        
+
         "ERROR: Failed to read response after multiple attempts".to_string()
     }
 
     // This method has been removed as it was unused
 
     /// Close the JSII runtime connection
-    pub fn close(mut self) {
+    pub fn close() -> Result<(), String> {
         // Send exit command
-        self.send_request(r#"{"exit":0}"#);
+        Self::send_request(r#"{"exit":0}"#)?;
 
-        // Wait for process to exit
-        self.process
+        // Get the runtime and wait for process to exit
+        let runtime = RUNTIME.get().ok_or("Runtime not initialized")?;
+        let mut runtime_guard = runtime
+            .lock()
+            .map_err(|e| format!("Failed to lock runtime: {}", e))?;
+
+        runtime_guard
+            .process
             .wait()
-            .expect("JSII runtime process did not terminate successfully");
+            .map_err(|e| format!("JSII runtime process did not terminate successfully: {}", e))?;
 
         println!("JSII runtime process terminated successfully");
+        Ok(())
     }
 
     /// Get all type information from a loaded JSII module
-    pub fn get_types(&mut self, module_name: &str) -> Result<Value, String> {
-        let request = format!(
-            r#"{{"api":"naming","assembly":"{}"}}"#,
-            module_name
-        );
-        
+    pub fn get_types(module_name: &str) -> Result<Value, String> {
+        Self::ensure_initialized()?;
+
+        let request = format!(r#"{{"api":"naming","assembly":"{}"}}"#, module_name);
+
         println!("DEBUG: Sending naming request: {}", request);
-        self.send_request(&request);
-        
+        Self::send_request(&request)?;
+
         println!("DEBUG: Waiting for naming response");
-        let response = self.read_response();
+        let response = Self::read_response()?;
         println!("DEBUG: Got naming response: {}", response);
-        
+
         // Parse the response to extract type information
         match serde_json::from_str::<Value>(&response) {
             Ok(json) => {
@@ -240,21 +363,20 @@ impl JsiiRuntime {
             Err(e) => Err(format!("Failed to parse response: {}", e)),
         }
     }
-    
+
     /// Get assembly metadata using the "assembly" API
-    pub fn get_assembly_metadata(&mut self, module_name: &str) -> Result<Value, String> {
-        let request = format!(
-            r#"{{"api":"assembly","assembly":"{}"}}"#,
-            module_name
-        );
-        
+    pub fn get_assembly_metadata(module_name: &str) -> Result<Value, String> {
+        Self::ensure_initialized()?;
+
+        let request = format!(r#"{{"api":"assembly","assembly":"{}"}}"#, module_name);
+
         println!("DEBUG: Sending assembly request: {}", request);
-        self.send_request(&request);
-        
+        Self::send_request(&request)?;
+
         println!("DEBUG: Waiting for assembly response");
-        let response = self.read_response();
+        let response = Self::read_response()?;
         println!("DEBUG: Got assembly response: {}", response);
-        
+
         // Parse the response to extract assembly metadata
         match serde_json::from_str::<Value>(&response) {
             Ok(json) => {
@@ -274,24 +396,70 @@ impl JsiiRuntime {
             Err(e) => Err(format!("Failed to parse response: {}", e)),
         }
     }
+
+    /// Internal method to load a module without calling ensure_initialized
+    fn load_module_internal(name: &str, version: &str, tarball_path: &str) -> Result<(), String> {
+        use std::path::Path;
+
+        if !Path::new(tarball_path).exists() {
+            return Err(format!("Module tarball not found: {}", tarball_path));
+        }
+
+        println!("Loading module {}@{} from {}", name, version, tarball_path);
+
+        let load_request = format!(
+            r#"{{"api":"load","name":"{}","version":"{}","tarball":"{}"}}"#,
+            name, version, tarball_path
+        );
+
+        // Send the load request directly to the runtime
+        let runtime = RUNTIME.get().ok_or("Runtime not initialized")?;
+        let mut runtime_guard = runtime
+            .lock()
+            .map_err(|e| format!("Failed to lock runtime: {}", e))?;
+
+        writeln!(runtime_guard.stdin, "{}", load_request)
+            .map_err(|e| format!("Failed to write request: {}", e))?;
+        runtime_guard
+            .stdin
+            .flush()
+            .map_err(|e| format!("Failed to flush stdin: {}", e))?;
+
+        // Read the response
+        let response = Self::read_response_inner(&mut *runtime_guard);
+
+        // Parse response to check for errors
+        if let Ok(json) = serde_json::from_str::<Value>(&response) {
+            if let Some(error_msg) = json.get("error").and_then(|v| v.as_str()) {
+                return Err(format!("Failed to load module {}: {}", name, error_msg));
+            }
+        }
+
+        println!("Successfully loaded module {}", name);
+        Ok(())
+    }
 }
 
 /// Gets a random enum value from the EnumDispenser class using direct protocol calls
-pub fn get_random_enum_values(runtime: &mut JsiiRuntime) -> Result<(String, i32), String> {
+pub fn get_random_enum_values() -> Result<(String, i32), String> {
     // We know that the JSII protocol doesn't provide direct access to the actual enum values
     // Instead, it only provides the enum member name in the format fqn/MEMBER_NAME
     // We need to map these names to their actual values either through looking up assembly metadata
     // or using a hardcoded mapping
-    
+
     println!("\n--- JSII Protocol Explanation ---");
-    println!("The JSII protocol serializes enum values as {{ \"$jsii.enum\": \"fqn/MEMBER_NAME\" }}");
-    println!("It does NOT include the actual underlying value (e.g., \"B?\" or 100) in the protocol.");
+    println!(
+        "The JSII protocol serializes enum values as {{ \"$jsii.enum\": \"fqn/MEMBER_NAME\" }}"
+    );
+    println!(
+        "It does NOT include the actual underlying value (e.g., \"B?\" or 100) in the protocol."
+    );
     println!("The client must maintain a mapping between enum names and their values.");
-    
+
     // Call randomStringLikeEnum static method using direct JSII protocol
     println!("\n--- Calling EnumDispenser.randomStringLikeEnum() via direct protocol ---");
     let string_enum_result =
-        runtime.invoke_static("jsii-calc.EnumDispenser", "randomStringLikeEnum", None)?;
+        JsiiRuntime::invoke_static("jsii-calc.EnumDispenser", "randomStringLikeEnum", None)?;
 
     // Parse the string enum result
     let string_value_name = match string_enum_result {
@@ -320,7 +488,7 @@ pub fn get_random_enum_values(runtime: &mut JsiiRuntime) -> Result<(String, i32)
             return Err("Expected object result".to_string());
         }
     };
-    
+
     // Map enum member names to their values using our knowledge of the enum definition
     println!("\n--- Mapping enum member names to values ---");
     println!("StringEnum {{ A = 'A!', B = 'B?', C = 'C.' }}");
@@ -328,14 +496,19 @@ pub fn get_random_enum_values(runtime: &mut JsiiRuntime) -> Result<(String, i32)
         "A" => "A!".to_string(),
         "B" => "B?".to_string(), // EnumDispenser.randomStringLikeEnum() always returns StringEnum.B
         "C" => "C.".to_string(),
-        _ => return Err(format!("Unknown string enum value name: {}", string_value_name)),
+        _ => {
+            return Err(format!(
+                "Unknown string enum value name: {}",
+                string_value_name
+            ));
+        }
     };
     println!("Mapped {} -> {}", string_value_name, string_value);
 
     // Call randomIntegerLikeEnum static method using direct JSII protocol
     println!("\n--- Calling EnumDispenser.randomIntegerLikeEnum() via direct protocol ---");
     let int_enum_result =
-        runtime.invoke_static("jsii-calc.EnumDispenser", "randomIntegerLikeEnum", None)?;
+        JsiiRuntime::invoke_static("jsii-calc.EnumDispenser", "randomIntegerLikeEnum", None)?;
 
     // Parse the integer enum result - first we need the enum value name
     let int_value_name = match int_enum_result {
@@ -364,7 +537,7 @@ pub fn get_random_enum_values(runtime: &mut JsiiRuntime) -> Result<(String, i32)
             return Err("Expected object result".to_string());
         }
     };
-    
+
     // Map enum member names to their values using our knowledge of the enum definition
     println!("AllTypesEnum {{ MY_ENUM_VALUE = 0, YOUR_ENUM_VALUE = 100, THIS_IS_GREAT = 2 }}");
     let int_value = match int_value_name.as_str() {
@@ -379,132 +552,49 @@ pub fn get_random_enum_values(runtime: &mut JsiiRuntime) -> Result<(String, i32)
 }
 
 pub fn simple_runtime_call() {
-    // Create a new JSII runtime
+    // The JSII runtime will be automatically initialized on first use
+    // This includes loading all required modules
     println!("Starting JSII runtime test...");
-    let mut runtime = JsiiRuntime::new();
 
-    // We need to load dependencies in the right order
-    println!("\n--- Testing module dependency loading ---");
-    use std::path::Path;
+    // Test the EnumDispenser class (modules are already loaded during initialization)
+    println!("\n--- Testing EnumDispenser class ---");
+    match get_random_enum_values() {
+        Ok((string_enum, int_enum)) => {
+            println!("\n=== Results ===");
+            println!("Random string-like enum: {}", string_enum);
+            println!("Random integer-like enum: {} (numeric value)", int_enum);
 
-    // 1. First load the base-of-base
-    let base_of_base_name = "@scope/jsii-calc-base-of-base"; // Using the @scope prefix from error!
-    let base_of_base_version = "2.1.1";
-    let base_of_base_tarball = "/home/clear/jsii/output/rust/scope-jsii-calc-base-of-base/jsii/scope-jsii-calc-base-of-base-2.1.1.tgz";
+            // Validate results
+            println!("\n=== Validation ===");
 
-    if Path::new(base_of_base_tarball).exists() {
-        println!("\nLoading base-of-base dependency");
-        let response = runtime.load_module(
-            base_of_base_name,
-            base_of_base_version,
-            base_of_base_tarball,
-        );
-        if response.contains("error") {
-            println!("Failed to load base-of-base, stopping here");
-            runtime.close();
-            return;
-        }
-    } else {
-        println!("WARNING: base-of-base tarball not found, cannot continue");
-        runtime.close();
-        return;
-    }
+            // From the EnumDispenser implementation, we know it always returns StringEnum.B
+            // and AllTypesEnum.YOUR_ENUM_VALUE (which is 100)
+            let expected_string_enum = "B?";
+            let string_valid = string_enum == expected_string_enum;
+            println!(
+                "String enum is valid: {} (expected: {}, got: {})",
+                string_valid, expected_string_enum, string_enum
+            );
 
-    // 2. Load the base
-    let base_name = "@scope/jsii-calc-base"; // Using the @scope prefix
-    let base_version = "0.0.0";
-    let base_tarball =
-        "/home/clear/jsii/output/rust/scope-jsii-calc-base/jsii/scope-jsii-calc-base-0.0.0.tgz";
+            // AllTypesEnum.YOUR_ENUM_VALUE is defined as 100 in the TS code
+            let expected_int_enum = 100;
+            let int_valid = int_enum == expected_int_enum;
+            println!(
+                "Integer enum is valid: {} (expected: {}, got: {})",
+                int_valid, expected_int_enum, int_enum
+            );
 
-    if Path::new(base_tarball).exists() {
-        println!("\nLoading base dependency");
-        let response = runtime.load_module(base_name, base_version, base_tarball);
-        if response.contains("error") {
-            println!("Failed to load base, stopping here");
-            runtime.close();
-            return;
-        }
-    } else {
-        println!("WARNING: base tarball not found, cannot continue");
-        runtime.close();
-        return;
-    }
-
-    // 3. Load the lib
-    let lib_name = "@scope/jsii-calc-lib"; // Using the @scope prefix
-    let lib_version = "0.0.0";
-    let lib_tarball =
-        "/home/clear/jsii/output/rust/scope-jsii-calc-lib/jsii/scope-jsii-calc-lib-0.0.0.tgz";
-
-    if Path::new(lib_tarball).exists() {
-        println!("\nLoading lib dependency");
-        let response = runtime.load_module(lib_name, lib_version, lib_tarball);
-        if response.contains("error") {
-            println!("Failed to load lib, stopping here");
-            runtime.close();
-            return;
-        }
-    } else {
-        println!("WARNING: lib tarball not found, cannot continue");
-        runtime.close();
-        return;
-    }
-
-    // 4. Finally load the main calc module
-    println!("\n--- Loading jsii-calc module ---");
-    let calc_name = "jsii-calc";
-    let calc_version = "3.20.120";
-    let calc_tarball = "/home/clear/jsii/output/rust/jsii-calc/jsii/jsii-calc-3.20.120.tgz";
-
-    if Path::new(calc_tarball).exists() {
-        let response = runtime.load_module(calc_name, calc_version, calc_tarball);
-
-        if !response.contains("error") {
-            println!("Successfully loaded all modules!");
-
-            // Now test the EnumDispenser class
-            println!("\n--- Testing EnumDispenser class ---");
-            match get_random_enum_values(&mut runtime) {
-                Ok((string_enum, int_enum)) => {
-                    println!("\n=== Results ===");
-                    println!("Random string-like enum: {}", string_enum);
-                    println!("Random integer-like enum: {} (numeric value)", int_enum);
-
-                    // Validate results
-                    println!("\n=== Validation ===");
-
-                    // From the EnumDispenser implementation, we know it always returns StringEnum.B
-                    // and AllTypesEnum.YOUR_ENUM_VALUE (which is 100)
-                    let expected_string_enum = "B";
-                    let string_valid = string_enum == expected_string_enum;
-                    println!(
-                        "String enum is valid: {} (expected: {}, got: {})",
-                        string_valid, expected_string_enum, string_enum
-                    );
-
-                    // AllTypesEnum.YOUR_ENUM_VALUE is defined as 100 in the TS code
-                    let expected_int_enum = 100;
-                    let int_valid = int_enum == expected_int_enum;
-                    println!(
-                        "Integer enum is valid: {} (expected: {}, got: {})",
-                        int_valid, expected_int_enum, int_enum
-                    );
-
-                    if string_valid && int_valid {
-                        println!("\n✅ All tests PASSED!");
-                    } else {
-                        println!("\n❌ Some tests FAILED!");
-                    }
-                }
-                Err(e) => println!("Failed to get random enum values: {}", e),
+            if string_valid && int_valid {
+                println!("\n✅ All tests PASSED!");
+            } else {
+                println!("\n❌ Some tests FAILED!");
             }
         }
-    } else {
-        println!("WARNING: jsii-calc tarball does not exist");
+        Err(e) => println!("Failed to get random enum values: {}", e),
     }
 
     println!("\n--- Test complete ---");
-    runtime.close();
+    let _ = JsiiRuntime::close();
 }
 
 #[test]
