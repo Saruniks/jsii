@@ -26,10 +26,8 @@
   },
   "scripts": {
     "gen": "bash generate.sh",
-    "build": "npm run gen && tsc --build && chmod +x bin/jsii-pacmak && npm run lint",
+    "build": "npm run gen && tsc --build && chmod +x bin/jsii-pacmak",
     "watch": "tsc --build -w",
-    "lint": "ESLINT_USE_FLAT_CONFIG=false eslint . --ext .js,.ts --ignore-path=.gitignore",
-    "lint:fix": "yarn lint --fix",
     "test": "npm run test:unit && npm run test:build",
     "test:unit": "jest",
     "test:build": "bash test/build-test.sh",
