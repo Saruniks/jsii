@@ -26,10 +26,14 @@ export class RustStruct extends RustType<ClassType> {
     }
 
     for (const method of this.type.ownMethods) {
-      emitMethod(code, method, this.type.fqn, this.type.assembly.name);
+      // TODO: Can we check if parentType of actual method is InterfaceType correctly?
+      emitMethod(code, method, this.type.fqn, this.type.assembly.name, false);
     }
 
     for (const property of this.type.ownProperties) {
+        // if (property.name === 'booleanValue') {
+          // code.line('fail compile');
+        // }
         code.openBlock(`fn get_${makeRustPropertyName(property.name)}(&self) -> ()`);
         code.line(`todo!();`);
         code.closeBlock();

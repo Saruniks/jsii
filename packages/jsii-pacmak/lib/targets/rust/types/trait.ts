@@ -8,7 +8,8 @@ export class RustTrait extends RustType<InterfaceType> {
         code.openBlock(`pub trait ${this.type.name}`);
 
         Object.values(this.type.getMethods()).forEach((method: Method) => {
-            emitMethod(code, method, this.type.fqn, this.type.assembly.name);
+            // TODO: Can we check if parentType of actual method is InterfaceType correctly?
+            emitMethod(code, method, this.type.fqn, this.type.assembly.name, true);
         });
 
         code.closeBlock();
