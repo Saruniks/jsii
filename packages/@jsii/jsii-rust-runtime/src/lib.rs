@@ -254,7 +254,7 @@ impl JsiiRuntime {
         Self::ensure_initialized()?;
 
         println!(
-            "DEBUG: Calling instance method {}.{} using direct protocol",
+            "DEBUG: Calling instance method on objref {}.{} using direct protocol",
             obj_ref, method
         );
 
@@ -270,10 +270,11 @@ impl JsiiRuntime {
             "[]".to_string()
         };
 
-        // Create the invoke protocol message
+        // Create the invoke protocol message - objref should be wrapped in $jsii.byref object
+        let objref_wrapped = format!(r#"{{"$jsii.byref":"{}"}}"#, obj_ref);
         let request = format!(
-            r#"{{"api":"invoke","objref":"{}","method":"{}","args":{}}}"#,
-            obj_ref, method, args_json
+            r#"{{"api":"invoke","objref":{},"method":"{}","args":{}}}"#,
+            objref_wrapped, method, args_json
         );
 
         println!("DEBUG: Sending invoke request: {}", request);
@@ -363,6 +364,7 @@ impl JsiiRuntime {
                 } else if let Some(ok) = json.get("ok") {
                     // Extract object reference from ok.objref
                     if let Some(objref) = ok.get("$jsii.byref").and_then(|v| v.as_str()) {
+                        println!("DEBUG: Extracted objref: {}", objref); // Should be "Object@10000"
                         Ok(objref.to_string())
                     } else {
                         Err("No $jsii.byref field found in ok response".to_string())
