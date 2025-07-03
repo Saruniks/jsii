@@ -24,9 +24,7 @@ export class RustStruct extends RustType<ClassType> {
     if (this.type.initializer) {
       code.openBlock(`pub fn new() -> Self`);
       code.line(`let jsii_res = jsii_rust_runtime::JsiiRuntime::create_object("${this.type.fqn}", Some(&[])).expect("JsiiRuntiem::create_object panic");`);
-      code.line(`let jsii_object = serde_json::from_str(&jsii_res).expect("Failed to deserialize result");`);
-      code.line(`Self { jsii_object }`);
-      // code.line(`Self`);
+      code.line(`Self { jsii_object: jsii_res }`);
       code.closeBlock();
       code.line();
     }

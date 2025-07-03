@@ -362,10 +362,10 @@ impl JsiiRuntime {
                     Err(format!("Error creating object: {}", error))
                 } else if let Some(ok) = json.get("ok") {
                     // Extract object reference from ok.objref
-                    if let Some(objref) = ok.get("objref").and_then(|v| v.as_str()) {
+                    if let Some(objref) = ok.get("$jsii.byref").and_then(|v| v.as_str()) {
                         Ok(objref.to_string())
                     } else {
-                        Err("No objref field found in ok response".to_string())
+                        Err("No $jsii.byref field found in ok response".to_string())
                     }
                 } else {
                     Err("No ok field found in response".to_string())
