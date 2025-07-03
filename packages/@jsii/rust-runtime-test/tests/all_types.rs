@@ -51,22 +51,22 @@ fn test_set_number_property() {
 
 // TODO: Test not a number
 
-// #[test]
-// fn test_get_date_property() {
-//     let all_types = AllTypes::new();
-//     // This will return current date in UTC
-//     // TODO: When we'll return Result then check if is_ok()
-//     let _res = all_types.get_date_property();
-// }
+#[test]
+fn test_get_date_property() {
+    let all_types = AllTypes::new();
+    // This will return current date in UTC
+    // TODO: When we'll return Result then check if is_ok()
+    let _res = all_types.get_date_property();
+}
 
-// #[test]
-// fn test_set_date_property() {
-//     let all_types = AllTypes::new();
-//     let date = Utc.with_ymd_and_hms(2021, 1, 1, 0, 0, 0).unwrap();
+#[test]
+fn test_set_date_property() {
+    let all_types = AllTypes::new();
+    let date = Utc.with_ymd_and_hms(2021, 1, 1, 0, 0, 0).unwrap();
 
-//     all_types.set_date_property(date);
+    all_types.set_date_property(date);
 
-//     let res = all_types.get_date_property();
+    let res = all_types.get_date_property();
 
-//     assert_eq!(res, date);
-// }
+    assert_eq!(res, date);
+}

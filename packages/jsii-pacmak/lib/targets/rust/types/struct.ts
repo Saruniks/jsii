@@ -3,6 +3,7 @@ import { ClassType } from "jsii-reflect"
 import { RustType } from "../rust-type";
 import { makeRustPropertyName, substituteReservedWords } from "../util";
 import { emitMethod } from "./method";
+import { compileJsiiForTest } from "jsii";
 
 export class RustStruct extends RustType<ClassType> {
   public emit(code: CodeMaker) {
@@ -55,7 +56,7 @@ export class RustStruct extends RustType<ClassType> {
         code.openBlock(`pub fn set_${makeRustPropertyName(property.name)}(&self, value: ${makeRustType(property.type)})`);
 
         if (this.type.initializer) {
-          code.line(`let jsii_res = jsii_rust_runtime::JsiiRuntime::set(&self.jsii_object_ref, "${substituteReservedWords(property.name)}", &serde_json::to_value(&value).expect("Failed to serialize value")).expect("JsiiRuntiem::invoke panic");`);
+          code.line(`let jsii_res = jsii_rust_runtime::JsiiRuntime::set(&self.jsii_object_ref, "${substituteReservedWords(property.name)}", &${makeRustTypeConversion(property.type)}).expect("JsiiRuntiem::invoke panic");`);
         } else {
           code.line(`todo!();`);
         }
@@ -64,6 +65,18 @@ export class RustStruct extends RustType<ClassType> {
     }
     code.closeBlock();
     code.line();
+  }
+}
+
+function makeRustTypeConversion(type: any): string {
+  if (type.primitive === 'date') {
+    return 'serde_json::json!({"$jsii.date": serde_json::to_value(value).unwrap()})';
+  } else if (type.primitive) {
+    return 'serde_json::to_value(&value).expect("Failed to serialize value")';
+  } else if (type.type?.isEnumType()) {
+    return 'serde_json::json!({"$jsii.enum": serde_json::to_value(value).unwrap()})';
+  } else {
+    return 'serde_json::json!({"$jsii.byref": serde_json::to_value(value).unwrap()})';
   }
 }
 
@@ -80,8 +93,8 @@ function makeRustType(type: any): string {
     return 'bool';
   } else if (type.primitive === 'date') {
     // Use chrono crate for date handling
-    return '()';
-    // return 'chrono::DateTime<chrono::Utc>';
+    // return '()';
+    return 'chrono::DateTime<chrono::Utc>';
     // Get the assembly/package name of the
   } else if (type.type?.isEnumType()) {
     // // Get the assembly/package name of the current type and the return type
