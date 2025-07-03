@@ -41,7 +41,7 @@ export class RustStruct extends RustType<ClassType> {
         code.openBlock(`pub fn get_${makeRustPropertyName(property.name)}(&self) -> ${makeRustType(property.type)}`);
 
         // TODO: Handle different property types and static properties
-        if (property.type.primitive === 'boolean' && this.type.initializer) {
+        if (property.type.primitive && this.type.initializer) {
           // invoke the jsii runtime to call the method
           code.line(`let jsii_res = jsii_rust_runtime::JsiiRuntime::get(&self.jsii_object_ref, "${substituteReservedWords(property.name)}").expect("JsiiRuntiem::invoke panic");`);
           code.line(`serde_json::from_str(&jsii_res).expect("Failed to deserialize result")`);
@@ -54,7 +54,7 @@ export class RustStruct extends RustType<ClassType> {
 
         code.openBlock(`pub fn set_${makeRustPropertyName(property.name)}(&self, value: ${makeRustType(property.type)})`);
 
-        if (property.type.primitive === 'boolean' && this.type.initializer) {
+        if (this.type.initializer) {
           code.line(`let jsii_res = jsii_rust_runtime::JsiiRuntime::set(&self.jsii_object_ref, "${substituteReservedWords(property.name)}", &serde_json::to_string(&value).expect("Failed to serialize value")).expect("JsiiRuntiem::invoke panic");`);
         } else {
           code.line(`todo!();`);
@@ -69,9 +69,11 @@ export class RustStruct extends RustType<ClassType> {
 
 function makeRustType(type: any): string {
   if (type.primitive === 'string') {
-    // return 'String';
+    return 'String';
   } else if (type.primitive === 'number') {
-    // return 'f64';
+    // TODO: What number do we actually use here?
+    // For now, we assume f64 (double precision float)
+    return 'f64';
   } else if (type.primitive === 'boolean') {
     // invoke the jsii runtime to call the method
     // handle boolean return type

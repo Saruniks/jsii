@@ -343,7 +343,10 @@ impl JsiiRuntime {
                     if let Some(result) = ok.get("value") {
                         // Convert different types to String
                         match result {
-                            Value::String(s) => Ok(s.clone()),
+                            Value::String(s) => {
+                                println!("DEBUG: Deserializing string value: {}", s);
+                                Ok(s.clone())
+                            }
                             Value::Bool(b) => Ok(b.to_string()),
                             Value::Number(n) => Ok(n.to_string()),
                             Value::Object(obj) => {
