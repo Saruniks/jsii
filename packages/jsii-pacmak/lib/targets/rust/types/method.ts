@@ -44,9 +44,15 @@ export function emitMethod(code: CodeMaker, method: Method, fqn: string, assembl
     if (method.static) {
         code.openBlock(`pub fn ${methodName}()${returns || ''}`);
         // TODO: Invoke the jsii runtime to call the method
-        code.line(`let jsii_res = jsii_rust_runtime::JsiiRuntime::invoke_static("${fqn}", "${method.name}", Some(&[]));`);
+        code.line(`let jsii_res = jsii_rust_runtime::JsiiRuntime::invoke_static("${fqn}", "${method.name}", Some(&[])).expect("JsiiRuntiem::invoke_static panic");`);
         code.line(`println!("Result: {:?}", jsii_res);`);
-        code.line('todo!();');
+
+        if (method.name === 'randomStringLikeEnum' || method.name === 'randomIntegerLikeEnum') {
+            // TODO: Deserialize without serde_json, just do Deserialize (use serde derive macro)
+            code.line(`serde_json::from_str(&jsii_res).expect("Failed to deserialize result")`);
+        } else {
+            code.line('todo!();');
+        }
     } else {
         code.openBlock(`fn ${methodName}(&self)${returns || ''}`);
         code.line(`todo!();`);

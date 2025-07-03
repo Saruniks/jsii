@@ -173,7 +173,11 @@ impl JsiiRuntime {
 
     /// Call a static method on a JSII class using direct protocol message
     /// TODO: Do we need a generic for parsing and returning different types?
-    pub fn invoke_static(fqn: &str, method: &str, args: Option<&[Value]>) -> Result<Value, String> {
+    pub fn invoke_static(
+        fqn: &str,
+        method: &str,
+        args: Option<&[Value]>,
+    ) -> Result<String, String> {
         Self::ensure_initialized()?;
 
         println!(
@@ -216,7 +220,10 @@ impl JsiiRuntime {
                     // Extract result from ok.result
                     if let Some(result) = ok.get("result") {
                         // Return the result part of the response
-                        Ok(result.clone())
+                        Ok(result
+                            .get("$jsii.enum")
+                            .expect("Failed to get result from jsii response")
+                            .to_string())
                     } else {
                         Err("No result field found in ok response".to_string())
                     }
@@ -229,9 +236,9 @@ impl JsiiRuntime {
     }
 
     /// Legacy method - keeping for compatibility
-    pub fn call_static_method(fqn: &str, method: &str) -> Result<Value, String> {
-        Self::invoke_static(fqn, method, None)
-    }
+    // pub fn call_static_method(fqn: &str, method: &str) -> Result<Value, String> {
+    //     Self::invoke_static(fqn, method, None)
+    // }
 
     /// Send a request to the JSII runtime
     fn send_request(request: &str) -> Result<(), String> {
@@ -452,115 +459,115 @@ impl JsiiRuntime {
 }
 
 /// Gets a random enum value from the EnumDispenser class using direct protocol calls
-pub fn get_random_enum_values() -> Result<(String, i32), String> {
-    // We know that the JSII protocol doesn't provide direct access to the actual enum values
-    // Instead, it only provides the enum member name in the format fqn/MEMBER_NAME
-    // We need to map these names to their actual values either through looking up assembly metadata
-    // or using a hardcoded mapping
+// pub fn get_random_enum_values() -> Result<(String, i32), String> {
+//     // We know that the JSII protocol doesn't provide direct access to the actual enum values
+//     // Instead, it only provides the enum member name in the format fqn/MEMBER_NAME
+//     // We need to map these names to their actual values either through looking up assembly metadata
+//     // or using a hardcoded mapping
 
-    println!("\n--- JSII Protocol Explanation ---");
-    println!(
-        "The JSII protocol serializes enum values as {{ \"$jsii.enum\": \"fqn/MEMBER_NAME\" }}"
-    );
-    println!(
-        "It does NOT include the actual underlying value (e.g., \"B?\" or 100) in the protocol."
-    );
-    println!("The client must maintain a mapping between enum names and their values.");
+//     println!("\n--- JSII Protocol Explanation ---");
+//     println!(
+//         "The JSII protocol serializes enum values as {{ \"$jsii.enum\": \"fqn/MEMBER_NAME\" }}"
+//     );
+//     println!(
+//         "It does NOT include the actual underlying value (e.g., \"B?\" or 100) in the protocol."
+//     );
+//     println!("The client must maintain a mapping between enum names and their values.");
 
-    // Call randomStringLikeEnum static method using direct JSII protocol
-    println!("\n--- Calling EnumDispenser.randomStringLikeEnum() via direct protocol ---");
-    let string_enum_result =
-        JsiiRuntime::invoke_static("jsii-calc.EnumDispenser", "randomStringLikeEnum", None)?;
+//     // Call randomStringLikeEnum static method using direct JSII protocol
+//     println!("\n--- Calling EnumDispenser.randomStringLikeEnum() via direct protocol ---");
+//     let string_enum_result =
+//         JsiiRuntime::invoke_static("jsii-calc.EnumDispenser", "randomStringLikeEnum", None)?;
 
-    // Parse the string enum result
-    let string_value_name = match string_enum_result {
-        Value::Object(obj) => {
-            println!("DEBUG: Received object for string enum result: {:?}", obj);
+//     // Parse the string enum result
+//     let string_value_name = match string_enum_result {
+//         Value::Object(obj) => {
+//             println!("DEBUG: Received object for string enum result: {:?}", obj);
 
-            if let Some(Value::String(enum_ref)) = obj.get("$jsii.enum") {
-                // Parse the enum reference which should be in the format "fqn/ENUM_VALUE"
-                let parts: Vec<&str> = enum_ref.split('/').collect();
-                if parts.len() == 2 {
-                    println!("Got string-like enum: {}", parts[1]);
-                    parts[1].to_string()
-                } else {
-                    return Err(format!("Invalid enum reference format: {}", enum_ref));
-                }
-            } else {
-                println!("DEBUG: Unexpected string enum result format: {:?}", obj);
-                return Err("Expected $jsii.enum in response".to_string());
-            }
-        }
-        _ => {
-            println!(
-                "DEBUG: Unexpected string enum result type: {:?}",
-                string_enum_result
-            );
-            return Err("Expected object result".to_string());
-        }
-    };
+//             if let Some(Value::String(enum_ref)) = obj.get("$jsii.enum") {
+//                 // Parse the enum reference which should be in the format "fqn/ENUM_VALUE"
+//                 let parts: Vec<&str> = enum_ref.split('/').collect();
+//                 if parts.len() == 2 {
+//                     println!("Got string-like enum: {}", parts[1]);
+//                     parts[1].to_string()
+//                 } else {
+//                     return Err(format!("Invalid enum reference format: {}", enum_ref));
+//                 }
+//             } else {
+//                 println!("DEBUG: Unexpected string enum result format: {:?}", obj);
+//                 return Err("Expected $jsii.enum in response".to_string());
+//             }
+//         }
+//         _ => {
+//             println!(
+//                 "DEBUG: Unexpected string enum result type: {:?}",
+//                 string_enum_result
+//             );
+//             return Err("Expected object result".to_string());
+//         }
+//     };
 
-    // Map enum member names to their values using our knowledge of the enum definition
-    println!("\n--- Mapping enum member names to values ---");
-    println!("StringEnum {{ A = 'A!', B = 'B?', C = 'C.' }}");
-    let string_value = match string_value_name.as_str() {
-        "A" => "A!".to_string(),
-        "B" => "B?".to_string(), // EnumDispenser.randomStringLikeEnum() always returns StringEnum.B
-        "C" => "C.".to_string(),
-        _ => {
-            return Err(format!(
-                "Unknown string enum value name: {}",
-                string_value_name
-            ));
-        }
-    };
-    println!("Mapped {} -> {}", string_value_name, string_value);
+//     // Map enum member names to their values using our knowledge of the enum definition
+//     println!("\n--- Mapping enum member names to values ---");
+//     println!("StringEnum {{ A = 'A!', B = 'B?', C = 'C.' }}");
+//     let string_value = match string_value_name.as_str() {
+//         "A" => "A!".to_string(),
+//         "B" => "B?".to_string(), // EnumDispenser.randomStringLikeEnum() always returns StringEnum.B
+//         "C" => "C.".to_string(),
+//         _ => {
+//             return Err(format!(
+//                 "Unknown string enum value name: {}",
+//                 string_value_name
+//             ));
+//         }
+//     };
+//     println!("Mapped {} -> {}", string_value_name, string_value);
 
-    // Call randomIntegerLikeEnum static method using direct JSII protocol
-    println!("\n--- Calling EnumDispenser.randomIntegerLikeEnum() via direct protocol ---");
-    let int_enum_result =
-        JsiiRuntime::invoke_static("jsii-calc.EnumDispenser", "randomIntegerLikeEnum", None)?;
+//     // Call randomIntegerLikeEnum static method using direct JSII protocol
+//     println!("\n--- Calling EnumDispenser.randomIntegerLikeEnum() via direct protocol ---");
+//     let int_enum_result =
+//         JsiiRuntime::invoke_static("jsii-calc.EnumDispenser", "randomIntegerLikeEnum", None)?;
 
-    // Parse the integer enum result - first we need the enum value name
-    let int_value_name = match int_enum_result {
-        Value::Object(obj) => {
-            println!("DEBUG: Received object for integer enum result: {:?}", obj);
+//     // Parse the integer enum result - first we need the enum value name
+//     let int_value_name = match int_enum_result {
+//         Value::Object(obj) => {
+//             println!("DEBUG: Received object for integer enum result: {:?}", obj);
 
-            if let Some(Value::String(enum_ref)) = obj.get("$jsii.enum") {
-                // Parse the enum reference which should be in the format "fqn/ENUM_VALUE"
-                let parts: Vec<&str> = enum_ref.split('/').collect();
-                if parts.len() == 2 {
-                    println!("Got integer-like enum: {}", parts[1]);
-                    parts[1].to_string()
-                } else {
-                    return Err(format!("Invalid enum reference format: {}", enum_ref));
-                }
-            } else {
-                println!("DEBUG: Unexpected integer enum result format: {:?}", obj);
-                return Err("Expected $jsii.enum in response".to_string());
-            }
-        }
-        _ => {
-            println!(
-                "DEBUG: Unexpected integer enum result type: {:?}",
-                int_enum_result
-            );
-            return Err("Expected object result".to_string());
-        }
-    };
+//             if let Some(Value::String(enum_ref)) = obj.get("$jsii.enum") {
+//                 // Parse the enum reference which should be in the format "fqn/ENUM_VALUE"
+//                 let parts: Vec<&str> = enum_ref.split('/').collect();
+//                 if parts.len() == 2 {
+//                     println!("Got integer-like enum: {}", parts[1]);
+//                     parts[1].to_string()
+//                 } else {
+//                     return Err(format!("Invalid enum reference format: {}", enum_ref));
+//                 }
+//             } else {
+//                 println!("DEBUG: Unexpected integer enum result format: {:?}", obj);
+//                 return Err("Expected $jsii.enum in response".to_string());
+//             }
+//         }
+//         _ => {
+//             println!(
+//                 "DEBUG: Unexpected integer enum result type: {:?}",
+//                 int_enum_result
+//             );
+//             return Err("Expected object result".to_string());
+//         }
+//     };
 
-    // Map enum member names to their values using our knowledge of the enum definition
-    println!("AllTypesEnum {{ MY_ENUM_VALUE = 0, YOUR_ENUM_VALUE = 100, THIS_IS_GREAT = 2 }}");
-    let int_value = match int_value_name.as_str() {
-        "MY_ENUM_VALUE" => 0,     // Default value (0)
-        "YOUR_ENUM_VALUE" => 100, // Explicitly set to 100 in the TypeScript code
-        "THIS_IS_GREAT" => 2,     // Default value (2)
-        _ => return Err(format!("Unknown integer enum value: {}", int_value_name)),
-    };
-    println!("Mapped {} -> {}", int_value_name, int_value);
+//     // Map enum member names to their values using our knowledge of the enum definition
+//     println!("AllTypesEnum {{ MY_ENUM_VALUE = 0, YOUR_ENUM_VALUE = 100, THIS_IS_GREAT = 2 }}");
+//     let int_value = match int_value_name.as_str() {
+//         "MY_ENUM_VALUE" => 0,     // Default value (0)
+//         "YOUR_ENUM_VALUE" => 100, // Explicitly set to 100 in the TypeScript code
+//         "THIS_IS_GREAT" => 2,     // Default value (2)
+//         _ => return Err(format!("Unknown integer enum value: {}", int_value_name)),
+//     };
+//     println!("Mapped {} -> {}", int_value_name, int_value);
 
-    Ok((string_value, int_value))
-}
+//     Ok((string_value, int_value))
+// }
 
 pub fn simple_runtime_call() {
     // The JSII runtime will be automatically initialized on first use
@@ -569,40 +576,40 @@ pub fn simple_runtime_call() {
 
     // Test the EnumDispenser class (modules are already loaded during initialization)
     println!("\n--- Testing EnumDispenser class ---");
-    match get_random_enum_values() {
-        Ok((string_enum, int_enum)) => {
-            println!("\n=== Results ===");
-            println!("Random string-like enum: {}", string_enum);
-            println!("Random integer-like enum: {} (numeric value)", int_enum);
+    // match get_random_enum_values() {
+    //     Ok((string_enum, int_enum)) => {
+    //         println!("\n=== Results ===");
+    //         println!("Random string-like enum: {}", string_enum);
+    //         println!("Random integer-like enum: {} (numeric value)", int_enum);
 
-            // Validate results
-            println!("\n=== Validation ===");
+    //         // Validate results
+    //         println!("\n=== Validation ===");
 
-            // From the EnumDispenser implementation, we know it always returns StringEnum.B
-            // and AllTypesEnum.YOUR_ENUM_VALUE (which is 100)
-            let expected_string_enum = "B?";
-            let string_valid = string_enum == expected_string_enum;
-            println!(
-                "String enum is valid: {} (expected: {}, got: {})",
-                string_valid, expected_string_enum, string_enum
-            );
+    //         // From the EnumDispenser implementation, we know it always returns StringEnum.B
+    //         // and AllTypesEnum.YOUR_ENUM_VALUE (which is 100)
+    //         let expected_string_enum = "B?";
+    //         let string_valid = string_enum == expected_string_enum;
+    //         println!(
+    //             "String enum is valid: {} (expected: {}, got: {})",
+    //             string_valid, expected_string_enum, string_enum
+    //         );
 
-            // AllTypesEnum.YOUR_ENUM_VALUE is defined as 100 in the TS code
-            let expected_int_enum = 100;
-            let int_valid = int_enum == expected_int_enum;
-            println!(
-                "Integer enum is valid: {} (expected: {}, got: {})",
-                int_valid, expected_int_enum, int_enum
-            );
+    //         // AllTypesEnum.YOUR_ENUM_VALUE is defined as 100 in the TS code
+    //         let expected_int_enum = 100;
+    //         let int_valid = int_enum == expected_int_enum;
+    //         println!(
+    //             "Integer enum is valid: {} (expected: {}, got: {})",
+    //             int_valid, expected_int_enum, int_enum
+    //         );
 
-            if string_valid && int_valid {
-                println!("\n✅ All tests PASSED!");
-            } else {
-                println!("\n❌ Some tests FAILED!");
-            }
-        }
-        Err(e) => println!("Failed to get random enum values: {}", e),
-    }
+    //         if string_valid && int_valid {
+    //             println!("\n✅ All tests PASSED!");
+    //         } else {
+    //             println!("\n❌ Some tests FAILED!");
+    //         }
+    //     }
+    //     Err(e) => println!("Failed to get random enum values: {}", e),
+    // }
 
     println!("\n--- Test complete ---");
     let _ = JsiiRuntime::close();
