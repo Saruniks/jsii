@@ -30,3 +30,22 @@ fn test_set_string_property() {
     let res = all_types.get_string_property();
     assert_eq!(res, "new value".to_string());
 }
+
+// TODO: Test not a string
+
+#[test]
+fn test_get_number_property() {
+    let all_types = AllTypes::new();
+    let res = all_types.get_number_property();
+    assert_eq!(res, 0.0);
+}
+
+#[test]
+fn test_set_number_property() {
+    let all_types = AllTypes::new();
+    all_types.set_number_property(100.0);
+    let res = all_types.get_number_property();
+    assert_eq!(res, 100.0);
+}
+
+// TODO: Test not a number
