@@ -13,6 +13,16 @@ struct JsiiRuntimeInner {
     stderr: BufReader<ChildStderr>,
 }
 
+use serde::{Deserialize, Serialize};
+#[derive(Deserialize, Serialize)]
+pub struct JsiiObject {
+    // Could it be an array of key-value pairs?
+    // TODO: Maybe type should be enum $jsii.enum, $jsii.{other_types} ...
+    pub key: String,
+
+    pub value: String,
+}
+
 /// Global singleton for JSII runtime
 pub struct JsiiRuntime;
 
@@ -162,6 +172,7 @@ impl JsiiRuntime {
     }
 
     /// Call a static method on a JSII class using direct protocol message
+    /// TODO: Do we need a generic for parsing and returning different types?
     pub fn invoke_static(fqn: &str, method: &str, args: Option<&[Value]>) -> Result<Value, String> {
         Self::ensure_initialized()?;
 

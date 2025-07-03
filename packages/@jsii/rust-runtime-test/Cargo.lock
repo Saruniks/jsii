@@ -49,6 +49,8 @@ dependencies = [
  "jsii-rust-runtime",
  "scope-jsii-calc-base",
  "scope-jsii-calc-lib",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -56,6 +58,7 @@ name = "jsii-rust-runtime"
 version = "0.1.0"
 dependencies = [
  "base64",
+ "serde",
  "serde_json",
 ]
 
@@ -104,6 +107,8 @@ version = "0.0.0"
 dependencies = [
  "jsii-rust-runtime",
  "scope-jsii-calc-base-of-base",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -111,6 +116,8 @@ name = "scope-jsii-calc-base-of-base"
 version = "2.1.1"
 dependencies = [
  "jsii-rust-runtime",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -120,6 +127,8 @@ dependencies = [
  "jsii-rust-runtime",
  "scope-jsii-calc-base",
  "scope-jsii-calc-base-of-base",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
