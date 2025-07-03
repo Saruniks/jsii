@@ -6,7 +6,7 @@ echo "🚀 Building Rust target for JSII..."
 
 # Clean up previous output to avoid conflicts
 echo "🧹 Cleaning up previous output..."
-# rm -rf ./output/rust
+rm -rf ./output/rust
 rm -rf ./packages/jsii-pacmak/output/rust
 
 # Run the Docker container with all commands
@@ -23,25 +23,25 @@ docker run --rm -v .:/jsii -w /jsii --user "$(id -u):$(id -g)" -e HOME=/tmp -e Y
     
     # Generate dependencies first (with --force-target since they don't have Rust targets configured)
     # echo '📦 Generating @scope/jsii-calc-base-of-base...'
-    if ! yarn workspace jsii-pacmak run jsii-pacmak --target rust --force-target --outdir ../../output ../../packages/@scope/jsii-calc-base-of-base/; then
+    if ! yarn workspace jsii-pacmak run jsii-pacmak --target go --force-target --outdir ../../output ../../packages/@scope/jsii-calc-base-of-base/; then
         echo '❌ Failed to generate @scope/jsii-calc-base-of-base - stopping here'
         exit 1
     fi
     
     # echo '📦 Generating @scope/jsii-calc-base...'
-    if ! yarn workspace jsii-pacmak run jsii-pacmak --target rust --force-target --outdir ../../output ../../packages/@scope/jsii-calc-base/; then
+    if ! yarn workspace jsii-pacmak run jsii-pacmak --target go --force-target --outdir ../../output ../../packages/@scope/jsii-calc-base/; then
         echo '❌ Failed to generate @scope/jsii-calc-base - stopping here'
         exit 1
     fi
     
     # echo '📦 Generating @scope/jsii-calc-lib...'
-    if ! yarn workspace jsii-pacmak run jsii-pacmak --target rust --force-target --outdir ../../output ../../packages/@scope/jsii-calc-lib/; then
+    if ! yarn workspace jsii-pacmak run jsii-pacmak --target go --force-target --outdir ../../output ../../packages/@scope/jsii-calc-lib/; then
         echo '❌ Failed to generate @scope/jsii-calc-lib - stopping here'
         exit 1
     fi
     
     echo '🦀 Generating main jsii-calc...'
-    if ! yarn workspace jsii-pacmak run jsii-pacmak --target rust --outdir ../../output ../../packages/jsii-calc/; then
+    if ! yarn workspace jsii-pacmak run jsii-pacmak --target go --outdir ../../output ../../packages/jsii-calc/; then
         echo '❌ Failed to generate Rust code - stopping here'
         exit 1
     fi
@@ -61,6 +61,8 @@ docker run --rm -v .:/jsii -w /jsii --user "$(id -u):$(id -g)" -e HOME=/tmp -e Y
     #     cd output/rust
     # fi
     
+    cd /jsii/output/rust/jsii-calc/jsii-calc
+
     # Print the final directory structure
     # Use tree command if available, otherwise use ls
 
@@ -69,6 +71,8 @@ docker run --rm -v .:/jsii -w /jsii --user "$(id -u):$(id -g)" -e HOME=/tmp -e Y
 
 cd output/rust/jsii-calc
 tree
+
+cd jsii-calc
 
 echo '🎨 Running cargo fmt...'
 if ! cargo fmt --check 2>&1; then
