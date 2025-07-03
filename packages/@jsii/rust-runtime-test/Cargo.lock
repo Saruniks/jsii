@@ -219,6 +219,7 @@ dependencies = [
  "chrono",
  "jsii-calc",
  "jsii-rust-runtime",
+ "serde_json",
  "trybuild",
 ]
 

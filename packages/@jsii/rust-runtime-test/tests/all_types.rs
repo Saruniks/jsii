@@ -70,3 +70,37 @@ fn test_set_date_property() {
 
     assert_eq!(res, date);
 }
+
+// TODO: Test for if (Object.prototype.toString.call(value) !== '[object Date]')
+
+#[test]
+fn test_get_json_property() {
+    let all_types = AllTypes::new();
+    // Get empty object
+    let res = all_types.get_json_property();
+    assert_eq!(res, serde_json::json!({}));
+} // Set new object
+
+#[test]
+fn test_set_json_property() {
+    let all_types = AllTypes::new();
+
+    // Get empty object
+    let res = all_types.get_json_property();
+    assert_eq!(res, serde_json::json!({}));
+
+    // Set new object
+    let new_value = serde_json::json!({"key": "value"});
+    all_types.set_json_property(new_value.clone());
+
+    // Get again and check if is the same
+    let res = all_types.get_json_property();
+    assert_eq!(res, new_value);
+
+    let another_new_value = serde_json::json!({"another_key": "another_value"});
+    all_types.set_json_property(another_new_value.clone());
+
+    // And again and check if is the same
+    let res = all_types.get_json_property();
+    assert_eq!(res, another_new_value);
+}

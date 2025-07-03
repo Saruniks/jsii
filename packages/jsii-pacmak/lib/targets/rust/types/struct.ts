@@ -68,6 +68,7 @@ export class RustStruct extends RustType<ClassType> {
   }
 }
 
+// TODO: Do we need to handle json here to pass as-in?
 function makeRustTypeConversion(type: any): string {
   if (type.primitive === 'date') {
     return 'serde_json::json!({"$jsii.date": serde_json::to_value(value).unwrap()})';
@@ -96,6 +97,8 @@ function makeRustType(type: any): string {
     // return '()';
     return 'chrono::DateTime<chrono::Utc>';
     // Get the assembly/package name of the
+  } else if (type.primitive === 'json') {
+    return 'serde_json::Value'; 
   } else if (type.type?.isEnumType()) {
     // // Get the assembly/package name of the current type and the return type
     // const currentAssembly = type.assembly.name;
