@@ -89,4 +89,7 @@ else
     exit 1
 fi
 
+cd /home/clear/jsii/packages/@jsii/rust-runtime-test
+cargo test --all -- --nocapture
+
 echo "🏁 Build process completed" 
