@@ -14,7 +14,7 @@ export class RustStruct extends RustType<ClassType> {
     } else {
       code.openBlock(`pub struct ${this.type.name}`);
       // TODO: Should jsii_object be something else than String?
-      code.line('jsii_object: String');
+      code.line('jsii_object_ref: String');
       code.closeBlock();
     }
     code.line();
@@ -24,7 +24,7 @@ export class RustStruct extends RustType<ClassType> {
     if (this.type.initializer) {
       code.openBlock(`pub fn new() -> Self`);
       code.line(`let jsii_res = jsii_rust_runtime::JsiiRuntime::create_object("${this.type.fqn}", Some(&[])).expect("JsiiRuntiem::create_object panic");`);
-      code.line(`Self { jsii_object: jsii_res }`);
+      code.line(`Self { jsii_object_ref: jsii_res }`);
       code.closeBlock();
       code.line();
     }
@@ -40,9 +40,10 @@ export class RustStruct extends RustType<ClassType> {
         // }
         code.openBlock(`pub fn get_${makeRustPropertyName(property.name)}(&self) -> ${makeRustReturn(property.type)}`);
 
-        if (property.type.primitive === 'boolean') {
+        // TODO: Handle different property types and static properties
+        if (property.type.primitive === 'boolean' && this.type.initializer) {
           // invoke the jsii runtime to call the method
-          code.line(`let jsii_res = jsii_rust_runtime::JsiiRuntime::invoke("${this.type.fqn}", "${substituteReservedWords(property.name)}", Some(&[])).expect("JsiiRuntiem::invoke panic");`);
+          code.line(`let jsii_res = jsii_rust_runtime::JsiiRuntime::invoke(&self.jsii_object_ref, "${substituteReservedWords(property.name)}", Some(&[])).expect("JsiiRuntiem::invoke panic");`);
           code.line(`serde_json::from_str(&jsii_res).expect("Failed to deserialize result")`);
         } else {
           code.line(`todo!();`);
