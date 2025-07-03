@@ -38,7 +38,7 @@ export class RustStruct extends RustType<ClassType> {
         // if (property.name === 'booleanValue') {
           // code.line('fail compile');
         // }
-        code.openBlock(`pub fn get_${makeRustPropertyName(property.name)}(&self) -> ${makeRustReturn(property.type)}`);
+        code.openBlock(`pub fn get_${makeRustPropertyName(property.name)}(&self) -> ${makeRustType(property.type)}`);
 
         // TODO: Handle different property types and static properties
         if (property.type.primitive === 'boolean' && this.type.initializer) {
@@ -52,8 +52,15 @@ export class RustStruct extends RustType<ClassType> {
         code.closeBlock();
         code.line();
 
-        code.openBlock(`pub fn set_${makeRustPropertyName(property.name)}(&mut self, value: ())`);
-        code.line(`todo!();`);
+        code.openBlock(`pub fn set_${makeRustPropertyName(property.name)}(&self, value: ${makeRustType(property.type)})`);
+
+        if (property.type.primitive === 'boolean' && this.type.initializer) {
+          // invoke the jsii runtime to call the method
+          code.line(`let jsii_res = jsii_rust_runtime::JsiiRuntime::set(&self.jsii_object_ref, "${substituteReservedWords(property.name)}", &serde_json::to_string(&value).expect("Failed to serialize value")).expect("JsiiRuntiem::invoke panic");`);
+          code.line(`serde_json::from_str(&jsii_res).expect("Failed to deserialize result");`);
+        } else {
+          code.line(`todo!();`);
+        }
         code.closeBlock();
         code.line();
     }
@@ -62,7 +69,7 @@ export class RustStruct extends RustType<ClassType> {
   }
 }
 
-function makeRustReturn(type: any): string {
+function makeRustType(type: any): string {
   if (type.primitive === 'string') {
     // return 'String';
   } else if (type.primitive === 'number') {
