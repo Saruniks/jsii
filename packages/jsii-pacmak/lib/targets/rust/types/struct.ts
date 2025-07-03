@@ -34,12 +34,13 @@ export class RustStruct extends RustType<ClassType> {
         // if (property.name === 'booleanValue') {
           // code.line('fail compile');
         // }
-        code.openBlock(`fn get_${makeRustPropertyName(property.name)}(&self) -> ()`);
+        code.openBlock(`pub fn get_${makeRustPropertyName(property.name)}(&self) -> ${makeRustReturn(property.type)}`);
+
         code.line(`todo!();`);
         code.closeBlock();
         code.line();
 
-        code.openBlock(`fn set_${makeRustPropertyName(property.name)}(&mut self, value: ())`);
+        code.openBlock(`pub fn set_${makeRustPropertyName(property.name)}(&mut self, value: ())`);
         code.line(`todo!();`);
         code.closeBlock();
         code.line();
@@ -47,4 +48,37 @@ export class RustStruct extends RustType<ClassType> {
     code.closeBlock();
     code.line();
   }
+}
+
+function makeRustReturn(type: any): string {
+  if (type.primitive === 'string') {
+    // return 'String';
+  } else if (type.primitive === 'number') {
+    // return 'f64';
+  } else if (type.primitive === 'boolean') {
+    return 'bool';
+  } else if (type.type?.isEnumType()) {
+    // // Get the assembly/package name of the current type and the return type
+    // const currentAssembly = type.assembly.name;
+    // const returnTypeAssembly = type.type.assembly.name;
+
+    // // Transform FQN to Rust module path format
+    // let rustType = type.type.fqn;
+
+    // // If the return type is from the same assembly, use relative path
+    // if (currentAssembly === returnTypeAssembly) {
+    //   // Extract just the type name without the package prefix
+    //   rustType = rustType.split('.').pop()!;
+    //   rustType = `crate::${rustType}`;
+    // } else {
+    //   // Otherwise use the full path with the proper Rust module syntax
+    //   rustType = rustType
+    //     .replace(/^@([^/]+)\/([^.]+)\./, '$1_$2::')
+    //     .replace(/-/g, '_')
+    //     .replace(/\./g, '::');
+    // }
+
+    // return rustType;
+  }
+  return '()'; // Default case for unsupported types
 }
