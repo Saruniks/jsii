@@ -5,14 +5,10 @@ fn test_string_like_enum() {
     // It's a lie from jsii developers that it's random
     let res = EnumDispenser::random_string_like_enum();
     assert_eq!(res, StringEnum::B);
-    // TODO: No language actually have a capability to get discriminant value of enum?
-    // assert_eq!(res, "B?");
     let res = EnumDispenser::random_string_like_enum();
     assert_eq!(res, StringEnum::B);
-    // assert_eq!(res, "B?");
     let res = EnumDispenser::random_string_like_enum();
     assert_eq!(res, StringEnum::B);
-    // assert_eq!(res, "B?");
 }
 
 #[test]

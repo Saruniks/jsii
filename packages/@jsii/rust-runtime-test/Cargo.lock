@@ -46,6 +46,7 @@ checksum = "4a5f13b858c8d314ee3e8f639011f7ccefe71f97f96e50151fb991f267928e2c"
 name = "jsii-calc"
 version = "3.20.120"
 dependencies = [
+ "jsii-rust-runtime",
  "scope-jsii-calc-base",
  "scope-jsii-calc-lib",
 ]
@@ -101,6 +102,7 @@ checksum = "28d3b2b1366ec20994f1fd18c3c594f05c5dd4bc44d8bb0c1c632c8d6829481f"
 name = "scope-jsii-calc-base"
 version = "0.0.0"
 dependencies = [
+ "jsii-rust-runtime",
  "scope-jsii-calc-base-of-base",
 ]
 
@@ -112,6 +114,7 @@ version = "2.1.1"
 name = "scope-jsii-calc-lib"
 version = "0.0.0"
 dependencies = [
+ "jsii-rust-runtime",
  "scope-jsii-calc-base",
  "scope-jsii-calc-base-of-base",
 ]
