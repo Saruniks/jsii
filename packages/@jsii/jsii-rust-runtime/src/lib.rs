@@ -344,6 +344,26 @@ impl JsiiRuntime {
                 } else if let Some(ok) = json.get("ok") {
                     // Extract result from ok.value
                     if let Some(result) = ok.get("value") {
+                        // Check if date:
+                        if let Some(obj) = result.as_object() {
+                            if obj.contains_key("$jsii.date") {
+                                // This is a date object
+                                if let Some(date_str) =
+                                    obj.get("$jsii.date").and_then(|v| v.as_str())
+                                {
+                                    // Parse the date string to chrono DateTime
+                                    return chrono::DateTime::parse_from_rfc3339(date_str)
+                                        .map_err(|e| format!("Failed to parse date: {}", e))
+                                        .map(|dt| dt.with_timezone(&chrono::Utc))
+                                        .and_then(|dt| {
+                                            serde_json::to_value(dt).map_err(|e| e.to_string())
+                                        })
+                                        .and_then(|v| {
+                                            serde_json::from_value(v).map_err(|e| e.to_string())
+                                        });
+                                }
+                            }
+                        }
                         // Try to deserialize the result directly to the target type
                         serde_json::from_value(result.clone()).map_err(|e| {
                             format!("Failed to deserialize result to target type: {}", e)
@@ -365,7 +385,8 @@ impl JsiiRuntime {
     }
 
     /// Set a property value on a JSII object using direct protocol message
-    pub fn set(obj_ref: &str, property: &str, value: &str) -> Result<String, String> {
+    /// TODO: Should value be generic to simplify the lib?
+    pub fn set(obj_ref: &str, property: &str, value: &Value) -> Result<String, String> {
         Self::ensure_initialized()?;
 
         println!(
@@ -374,19 +395,19 @@ impl JsiiRuntime {
         );
 
         // Parse the value as JSON to ensure it's properly formatted
-        let value_json = match serde_json::from_str::<Value>(value) {
-            Ok(json_value) => json_value,
-            Err(_) => {
-                // If it's not valid JSON, treat it as a string literal
-                Value::String(value.to_string())
-            }
-        };
+        // let value_json = match serde_json::from_str::<Value>(value) {
+        //     Ok(json_value) => json_value,
+        //     Err(_) => {
+        //         // If it's not valid JSON, treat it as a string literal
+        //         Value::String(value.to_string())
+        //     }
+        // };
 
         // Create the set protocol message - objref should be wrapped in $jsii.byref object
         let objref_wrapped = format!(r#"{{"$jsii.byref":"{}"}}"#, obj_ref);
         let request = format!(
             r#"{{"api":"set","objref":{},"property":"{}","value":{}}}"#,
-            objref_wrapped, property, value_json
+            objref_wrapped, property, value
         );
 
         println!("DEBUG: Sending set request: {}", request);

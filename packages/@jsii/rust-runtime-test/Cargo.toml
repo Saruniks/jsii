@@ -9,3 +9,4 @@ jsii-calc = { path = "../../../output/rust/jsii-calc" }
 
 [dev-dependencies]
 trybuild = "1.0.105"
+chrono = "0.4"

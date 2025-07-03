@@ -61,10 +61,11 @@ export class Crate extends RustModule {
     code.line(`edition = "2024"`);
 
     code.line('');
-    code.line(`[dependencies]`);
-    code.line(`jsii-rust-runtime = { version = "0.1", path = "/home/clear/jsii/packages/@jsii/jsii-rust-runtime" }`);
-    code.line(`serde = { version = "1.0", features = ["derive"] }`);
-    code.line(`serde_json = "1.0"`);
+    code.line('[dependencies]');
+    code.line('jsii-rust-runtime = { version = "0.1", path = "/home/clear/jsii/packages/@jsii/jsii-rust-runtime" }');
+    code.line('serde = { version = "1.0", features = ["derive"] }');
+    code.line('serde_json = "1.0"');
+    code.line('chrono = { version = "0.4", features = ["serde"] }');
 
     for (const dep of this.assembly.dependencies) {
       let depName = dep.assembly.name.replace(/[@/]/g, '-');
