@@ -227,12 +227,13 @@ function makeRustTypeConversion(type: any): string {
           // Create the proper JSII reference
           transformed_array.push(serde_json::json!({"$jsii.byref": obj_ref}));
         }
-        serde_json::json!({"$jsii.array": transformed_array})
+        // JSII runtime expects arrays directly, not wrapped in $jsii.array
+        serde_json::Value::Array(transformed_array)
       }`;
     } else {
       // For arrays with primitive values
-      // Primitive arrays don't need conversion, just serialize them directly
-      return 'serde_json::json!({"$jsii.array": value})';
+      // The JSII runtime expects arrays as a Value, but not wrapped in $jsii.array
+      return 'serde_json::to_value(&value).expect("Failed to serialize array")';
     }
   } else if (type.primitive) {
     return 'serde_json::to_value(&value).expect("Failed to serialize value")';

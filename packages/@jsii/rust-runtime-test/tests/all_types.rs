@@ -161,6 +161,9 @@ fn test_set_map_property() {
     new_value.insert("key2".to_string(), number2);
     all_types.set_map_property(new_value.clone());
 
+    let res = all_types.get_map_property();
+    assert_eq!(res, new_value);
+
     // let res = all_types.get_map_property();
     // assert_eq!(res, new_value);
 
