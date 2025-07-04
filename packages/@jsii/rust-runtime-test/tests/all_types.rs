@@ -164,16 +164,18 @@ fn test_set_map_property() {
     let res = all_types.get_map_property();
     assert_eq!(res, new_value);
 
-    // let res = all_types.get_map_property();
-    // assert_eq!(res, new_value);
+    let mut another_new_value = HashMap::new();
 
-    // let res = all_types.get_map_property();
-    // assert_eq!(res, new_value);
-    // // Set another map
-    // let mut another_new_value = HashMap::new();
-    // another_new_value.insert("another_key1".to_string(), 3.0);
-    // another_new_value.insert("another_key2".to_string(), 4.0);
-    // // And again and check if is the same
+    let another_number1 = scope_jsii_calc_lib::Number::new(3.0);
+    let another_number2 = scope_jsii_calc_lib::Number::new(4.0);
+
+    another_new_value.insert("another_key1".to_string(), another_number1);
+    another_new_value.insert("another_key2".to_string(), another_number2);
+
+    all_types.set_map_property(another_new_value.clone());
+
+    let res = all_types.get_map_property();
+    assert_eq!(res, another_new_value);
 }
 
 #[test]

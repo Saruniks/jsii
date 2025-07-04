@@ -74,9 +74,9 @@ export class RustStruct extends RustType<ClassType> {
         // TODO: Handle different property types and static properties
         if (this.type.initializer) {
           // Check if this is a trait (interface) type
-          const isTraitTypeProperty = isTraitType(property.type);
+          const traitTypeProperty = isTraitType(property.type);
           
-          if (isTraitTypeProperty) {
+          if (traitTypeProperty) {
             // For trait types, just return a todo!()
             code.line(`todo!();`);
           } else {
@@ -88,53 +88,105 @@ export class RustStruct extends RustType<ClassType> {
               // For primitive types, use the generic getter
               code.line(`jsii_rust_runtime::JsiiRuntime::get(&self.jsii_object_ref, "${substituteReservedWords(property.name)}").expect("JsiiRuntime::get failed")`);
             } else {
-              // Check if the Rust type is a simple type that should use generic getter
-              const rustType = makeRustType(property.type, this.type.assembly.name);
-              const isSimpleType = rustType === 'String' || rustType === 'f64' || rustType === 'bool' || rustType === 'serde_json::Value';
-              
-              if (isSimpleType) {
-                // For simple types (including enum strings), use the generic getter
-                code.line(`jsii_rust_runtime::JsiiRuntime::get(&self.jsii_object_ref, "${substituteReservedWords(property.name)}").expect("JsiiRuntime::get failed")`);
-              } else {
-                // Determine if this is a complex type that needs special handling
-                const isComplexType = property.type.fqn || 
-                  (property.type.type && property.type.type.fqn);
-                console.log(`DEBUG: Property ${property.name}, isComplexType: ${isComplexType}, fqn: ${property.type.fqn}`);
+              // Check if this is a map type
+              const collection = (property.type as any).collection || (property.type as any).spec?.collection;
+              if (collection?.kind === 'map') {
+                // Check if map elements are complex types (like classes)
+                const isComplexElement = collection.elementtype?.fqn || 
+                                      (collection.elementtype?.type && !collection.elementtype.primitive);
                 
-                if (isComplexType) {
-                  // For complex types, extract the object reference and construct a new instance
-                  const typeName = makeRustType(property.type, this.type.assembly.name);
+                if (isComplexElement) {
+                  // For maps with complex objects, we need to process each entry
+                  const elementType = makeRustType(collection.elementtype, this.type.assembly.name);
                   
-                  // Check if this is an interface type that needs concrete wrapper
-                  const isInterface = (property.type.type && property.type.type.isInterfaceType && property.type.type.isInterfaceType()) ||
-                                     (!property.type.type && property.type.fqn && (
-                                       property.type.fqn.includes('Props') || 
-                                       property.type.fqn.includes('Entry') ||
-                                       property.type.fqn.startsWith('I')
-                                     ));
+                  // Check if the element type is an interface (trait) - if so, use the concrete implementation
+                  const isElementInterface = (collection.elementtype.type && 
+                                           collection.elementtype.type.isInterfaceType && 
+                                           collection.elementtype.type.isInterfaceType()) ||
+                                          (!collection.elementtype.type && collection.elementtype.fqn && (
+                                            collection.elementtype.fqn.includes('Props') || 
+                                            collection.elementtype.fqn.includes('Entry') ||
+                                            collection.elementtype.fqn.endsWith('Obj') ||
+                                            collection.elementtype.fqn.startsWith('I')
+                                          ));
                   
-                  if (isInterface) {
-                    // For interface types, return the concrete wrapper implementation
-                    code.line(`let json_response = jsii_rust_runtime::JsiiRuntime::get_string(&self.jsii_object_ref, "${substituteReservedWords(property.name)}").expect("JsiiRuntime::get_string failed");`);
-                    code.line(`let parsed_response: serde_json::Value = serde_json::from_str(&json_response).expect("Failed to parse JSON response");`);
-                    code.line(`let object_ref = parsed_response.get("$jsii.byref")`);
-                    code.line(`  .and_then(|v| v.as_str())`);
-                    code.line(`  .expect("Failed to extract object reference from response")`);
-                    code.line(`  .to_string();`);
-                    code.line(`${typeName}::from_jsii_object_ref(object_ref)`);
-                  } else {
-                    // For other complex types, use the existing logic
-                    code.line(`let json_response = jsii_rust_runtime::JsiiRuntime::get_string(&self.jsii_object_ref, "${substituteReservedWords(property.name)}").expect("JsiiRuntime::get_string failed");`);
-                    code.line(`let parsed_response: serde_json::Value = serde_json::from_str(&json_response).expect("Failed to parse JSON response");`);
-                    code.line(`let object_ref = parsed_response.get("$jsii.byref")`);
-                    code.line(`  .and_then(|v| v.as_str())`);
-                    code.line(`  .expect("Failed to extract object reference from response")`);
-                    code.line(`  .to_string();`);
-                    code.line(`${typeName} { jsii_object_ref: object_ref, }`);
-                  }
+                  const actualElementType = isElementInterface ? 
+                    (elementType.endsWith('Impl') ? elementType : `${elementType}Impl`) : 
+                    elementType;
+                  code.line(`{`);
+                  code.line(`  // Get the map as a JSON value first`);
+                  code.line(`  let json_response: serde_json::Value = jsii_rust_runtime::JsiiRuntime::get(&self.jsii_object_ref, "${substituteReservedWords(property.name)}").expect("JsiiRuntime::get failed");`);
+                  code.line(`  // Expect a $jsii.map object`);
+                  code.line(`  let map_obj = json_response.get("$jsii.map").expect("Expected $jsii.map");`);
+                  code.line(`  let mut result = std::collections::HashMap::new();`);
+                  code.line(`  // Process each entry in the map`);
+                  code.line(`  if let serde_json::Value::Object(map) = map_obj {`);
+                  code.line(`    for (key, value) in map.iter() {`);
+                  code.line(`      // Get the object reference from the byref`);
+                  code.line(`      let obj_ref = value.get("$jsii.byref")`);
+                  code.line(`        .and_then(|v| v.as_str())`);
+                  code.line(`        .expect("Failed to extract object reference from map value")`);
+                  code.line(`        .to_string();`);
+                  code.line(`      // Create a new instance using the object reference`);
+                  code.line(`      let obj = ${actualElementType} { jsii_object_ref: obj_ref };`);
+                  code.line(`      result.insert(key.clone(), obj);`);
+                  code.line(`    }`);
+                  code.line(`  }`);
+                  code.line(`  result`);
+                  code.line(`}`);
                 } else {
-                  // For other cases (like unknown types), fall back to generic getter
+                  // For maps with primitive values, use generic getter
                   code.line(`jsii_rust_runtime::JsiiRuntime::get(&self.jsii_object_ref, "${substituteReservedWords(property.name)}").expect("JsiiRuntime::get failed")`);
+                }
+              } else {
+                // Check if the Rust type is a simple type that should use generic getter
+                const rustType = makeRustType(property.type, this.type.assembly.name);
+                const isSimpleType = rustType === 'String' || rustType === 'f64' || rustType === 'bool' || rustType === 'serde_json::Value';
+                
+                if (isSimpleType) {
+                  // For simple types (including enum strings), use the generic getter
+                  code.line(`jsii_rust_runtime::JsiiRuntime::get(&self.jsii_object_ref, "${substituteReservedWords(property.name)}").expect("JsiiRuntime::get failed")`);
+                } else {
+                  // Determine if this is a complex type that needs special handling
+                  const isComplexType = property.type.fqn || 
+                    (property.type.type && property.type.type.fqn);
+                  console.log(`DEBUG: Property ${property.name}, isComplexType: ${isComplexType}, fqn: ${property.type.fqn}`);
+                
+                  if (isComplexType) {
+                    // For complex types, extract the object reference and construct a new instance
+                    const typeName = makeRustType(property.type, this.type.assembly.name);
+                    
+                    // Check if this is an interface type that needs concrete wrapper
+                    const isInterface = (property.type.type && property.type.type.isInterfaceType && property.type.type.isInterfaceType()) ||
+                                       (!property.type.type && property.type.fqn && (
+                                         property.type.fqn.includes('Props') || 
+                                         property.type.fqn.includes('Entry') ||
+                                         property.type.fqn.startsWith('I')
+                                       ));
+                    
+                    if (isInterface) {
+                      // For interface types, return the concrete wrapper implementation
+                      code.line(`let json_response = jsii_rust_runtime::JsiiRuntime::get_string(&self.jsii_object_ref, "${substituteReservedWords(property.name)}").expect("JsiiRuntime::get_string failed");`);
+                      code.line(`let parsed_response: serde_json::Value = serde_json::from_str(&json_response).expect("Failed to parse JSON response");`);
+                      code.line(`let object_ref = parsed_response.get("$jsii.byref")`);
+                      code.line(`  .and_then(|v| v.as_str())`);
+                      code.line(`  .expect("Failed to extract object reference from response")`);
+                      code.line(`  .to_string();`);
+                      code.line(`${typeName}::from_jsii_object_ref(object_ref)`);
+                    } else {
+                      // For other complex types, use the existing logic
+                      code.line(`let json_response = jsii_rust_runtime::JsiiRuntime::get_string(&self.jsii_object_ref, "${substituteReservedWords(property.name)}").expect("JsiiRuntime::get_string failed");`);
+                      code.line(`let parsed_response: serde_json::Value = serde_json::from_str(&json_response).expect("Failed to parse JSON response");`);
+                      code.line(`let object_ref = parsed_response.get("$jsii.byref")`);
+                      code.line(`  .and_then(|v| v.as_str())`);
+                      code.line(`  .expect("Failed to extract object reference from response")`);
+                      code.line(`  .to_string();`);
+                      code.line(`${typeName} { jsii_object_ref: object_ref, }`);
+                    }
+                  } else {
+                    // For other cases (like unknown types), fall back to generic getter
+                    code.line(`jsii_rust_runtime::JsiiRuntime::get(&self.jsii_object_ref, "${substituteReservedWords(property.name)}").expect("JsiiRuntime::get failed")`);
+                  }
                 }
               }
             }
@@ -149,9 +201,9 @@ export class RustStruct extends RustType<ClassType> {
         code.openBlock(`pub fn set_${makeRustPropertyName(property.name)}(&self, value: ${makeRustTypeForProperty(property.type, this.type.assembly.name)})`);
 
         // Check if this is a trait (interface) type
-        const isTraitTypeProperty = isTraitType(property.type);
+        const traitTypePropertySetter = isTraitType(property.type);
         
-        if (this.type.initializer && !isTraitTypeProperty) {
+        if (this.type.initializer && !traitTypePropertySetter) {
           code.line(`let jsii_res = jsii_rust_runtime::JsiiRuntime::set(&self.jsii_object_ref, "${substituteReservedWords(property.name)}", &${makeRustTypeConversion(property.type)}).expect("JsiiRuntiem::invoke panic");`);
         } else {
           code.line(`todo!();`);

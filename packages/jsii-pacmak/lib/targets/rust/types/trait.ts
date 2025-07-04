@@ -20,7 +20,7 @@ export class RustTrait extends RustType<InterfaceType> {
         // Generate a concrete wrapper implementation for serialization
         code.line('#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]');
         code.openBlock(`pub struct ${this.type.name}Impl`);
-        code.line('jsii_object_ref: String,');
+        code.line('pub jsii_object_ref: String,');
         code.closeBlock();
         code.line();
 
