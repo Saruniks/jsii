@@ -90,6 +90,8 @@ else
 fi
 
 cd /home/clear/jsii/packages/@jsii/rust-runtime-test
-cargo test --all -- --nocapture
+RUSTFLAGS='-Awarnings' cargo test --all -- --nocapture
 
 echo "🏁 Build process completed" 
+
+echo ""

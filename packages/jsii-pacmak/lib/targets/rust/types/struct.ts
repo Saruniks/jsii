@@ -8,14 +8,16 @@ import { compileJsiiForTest } from "jsii";
 export class RustStruct extends RustType<ClassType> {
   public emit(code: CodeMaker) {
     if (!this.type.initializer) {
+      code.line('#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]');
       code.openBlock(`pub struct ${this.type.name}`);
       code.line('// _private field is used to prevent instantiation of this struct');
       code.line(`_private: (),`);
       code.closeBlock();
     } else {
+      code.line('#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]');
       code.openBlock(`pub struct ${this.type.name}`);
       // TODO: Should jsii_object be something else than String?
-      code.line('jsii_object_ref: String');
+      code.line('pub jsii_object_ref: String,');
       code.closeBlock();
     }
     code.line();
@@ -39,13 +41,76 @@ export class RustStruct extends RustType<ClassType> {
         // if (property.name === 'booleanValue') {
           // code.line('fail compile');
         // }
-        code.openBlock(`pub fn get_${makeRustPropertyName(property.name)}(&self) -> ${makeRustType(property.type)}`);
+        code.openBlock(`pub fn get_${makeRustPropertyName(property.name)}(&self) -> ${makeRustTypeForProperty(property.type, this.type.assembly.name)}`);
 
         // TODO: Handle different property types and static properties
         if (this.type.initializer) {
-          // invoke the jsii runtime to call the method
-          // TODO: Force inference by returning directly the type
-          code.line(`jsii_rust_runtime::JsiiRuntime::get(&self.jsii_object_ref, "${substituteReservedWords(property.name)}").expect("JsiiRuntiem::invoke panic")`);
+          // Check if this is a trait (interface) type
+          const isTraitTypeProperty = isTraitType(property.type);
+          
+          if (isTraitTypeProperty) {
+            // For trait types, just return a todo!()
+            code.line(`todo!();`);
+          } else {
+            // Check if it's a primitive type first
+            const isPrimitive = property.type.primitive;
+            console.log(`DEBUG: Property ${property.name}, isPrimitive: ${isPrimitive}, type:`, property.type);
+            
+            if (isPrimitive) {
+              // For primitive types, use the generic getter
+              code.line(`jsii_rust_runtime::JsiiRuntime::get(&self.jsii_object_ref, "${substituteReservedWords(property.name)}").expect("JsiiRuntime::get failed")`);
+            } else {
+              // Check if the Rust type is a simple type that should use generic getter
+              const rustType = makeRustType(property.type, this.type.assembly.name);
+              const isSimpleType = rustType === 'String' || rustType === 'f64' || rustType === 'bool' || rustType === 'serde_json::Value';
+              
+              if (isSimpleType) {
+                // For simple types (including enum strings), use the generic getter
+                code.line(`jsii_rust_runtime::JsiiRuntime::get(&self.jsii_object_ref, "${substituteReservedWords(property.name)}").expect("JsiiRuntime::get failed")`);
+              } else {
+                // Determine if this is a complex type that needs special handling
+                const isComplexType = property.type.fqn || 
+                  (property.type.type && property.type.type.fqn);
+                console.log(`DEBUG: Property ${property.name}, isComplexType: ${isComplexType}, fqn: ${property.type.fqn}`);
+                
+                if (isComplexType) {
+                  // For complex types, extract the object reference and construct a new instance
+                  const typeName = makeRustType(property.type, this.type.assembly.name);
+                  
+                  // Check if this is an interface type that needs concrete wrapper
+                  const isInterface = (property.type.type && property.type.type.isInterfaceType && property.type.type.isInterfaceType()) ||
+                                     (!property.type.type && property.type.fqn && (
+                                       property.type.fqn.includes('Props') || 
+                                       property.type.fqn.includes('Entry') ||
+                                       property.type.fqn.startsWith('I')
+                                     ));
+                  
+                  if (isInterface) {
+                    // For interface types, return the concrete wrapper implementation
+                    code.line(`let json_response = jsii_rust_runtime::JsiiRuntime::get_string(&self.jsii_object_ref, "${substituteReservedWords(property.name)}").expect("JsiiRuntime::get_string failed");`);
+                    code.line(`let parsed_response: serde_json::Value = serde_json::from_str(&json_response).expect("Failed to parse JSON response");`);
+                    code.line(`let object_ref = parsed_response.get("$jsii.byref")`);
+                    code.line(`  .and_then(|v| v.as_str())`);
+                    code.line(`  .expect("Failed to extract object reference from response")`);
+                    code.line(`  .to_string();`);
+                    code.line(`${typeName}::from_jsii_object_ref(object_ref)`);
+                  } else {
+                    // For other complex types, use the existing logic
+                    code.line(`let json_response = jsii_rust_runtime::JsiiRuntime::get_string(&self.jsii_object_ref, "${substituteReservedWords(property.name)}").expect("JsiiRuntime::get_string failed");`);
+                    code.line(`let parsed_response: serde_json::Value = serde_json::from_str(&json_response).expect("Failed to parse JSON response");`);
+                    code.line(`let object_ref = parsed_response.get("$jsii.byref")`);
+                    code.line(`  .and_then(|v| v.as_str())`);
+                    code.line(`  .expect("Failed to extract object reference from response")`);
+                    code.line(`  .to_string();`);
+                    code.line(`${typeName} { jsii_object_ref: object_ref, }`);
+                  }
+                } else {
+                  // For other cases (like unknown types), fall back to generic getter
+                  code.line(`jsii_rust_runtime::JsiiRuntime::get(&self.jsii_object_ref, "${substituteReservedWords(property.name)}").expect("JsiiRuntime::get failed")`);
+                }
+              }
+            }
+          }
         } else {
           code.line(`todo!();`);
         }
@@ -53,9 +118,12 @@ export class RustStruct extends RustType<ClassType> {
         code.closeBlock();
         code.line();
 
-        code.openBlock(`pub fn set_${makeRustPropertyName(property.name)}(&self, value: ${makeRustType(property.type)})`);
+        code.openBlock(`pub fn set_${makeRustPropertyName(property.name)}(&self, value: ${makeRustTypeForProperty(property.type, this.type.assembly.name)})`);
 
-        if (this.type.initializer) {
+        // Check if this is a trait (interface) type
+        const isTraitTypeProperty = isTraitType(property.type);
+        
+        if (this.type.initializer && !isTraitTypeProperty) {
           code.line(`let jsii_res = jsii_rust_runtime::JsiiRuntime::set(&self.jsii_object_ref, "${substituteReservedWords(property.name)}", &${makeRustTypeConversion(property.type)}).expect("JsiiRuntiem::invoke panic");`);
         } else {
           code.line(`todo!();`);
@@ -70,63 +138,334 @@ export class RustStruct extends RustType<ClassType> {
 
 // TODO: Do we need to handle json here to pass as-in?
 function makeRustTypeConversion(type: any): string {
+  // Extract collection from either direct or TypeReference
+  const collection = type.collection || type.spec?.collection;
+  
   if (type.primitive === 'date') {
     return 'serde_json::json!({"$jsii.date": serde_json::to_value(value).unwrap()})';
+  } else if (collection?.kind === 'map') {
+    return 'serde_json::to_value(&value).expect("Failed to serialize map value")';
+  } else if (collection?.kind === 'array') {
+    return 'serde_json::to_value(&value).expect("Failed to serialize array value")';
   } else if (type.primitive) {
     return 'serde_json::to_value(&value).expect("Failed to serialize value")';
   } else if (type.type?.isEnumType()) {
     return 'serde_json::json!({"$jsii.enum": serde_json::to_value(value).unwrap()})';
+  } else if (type.spec?.union) {
+    return 'serde_json::to_value(&value).expect("Failed to serialize union value")';
   } else {
-    return 'serde_json::json!({"$jsii.byref": serde_json::to_value(value).unwrap()})';
+    return 'serde_json::json!({"$jsii.byref": self.jsii_object_ref.clone()})';
   }
 }
 
-function makeRustType(type: any): string {
-  if (type.primitive === 'string') {
-    return 'String';
-  } else if (type.primitive === 'number') {
-    // TODO: What number do we actually use here?
-    // For now, we assume f64 (double precision float)
-    return 'f64';
-  } else if (type.primitive === 'boolean') {
-    // invoke the jsii runtime to call the method
-    // handle boolean return type
-    return 'bool';
-  } else if (type.primitive === 'date') {
-    // Use chrono crate for date handling
-    // return '()';
-    return 'chrono::DateTime<chrono::Utc>';
-    // Get the assembly/package name of the
-    //TODO:  Handle as a sub-type of json??
-  } else if (type.collection?.kind === 'map') {
-    return `std::collections::HashMap<String, ${makeRustType(type.collection?.elementType || { primitive: 'string' })}>`;
-  } else if (type.collection?.kind === 'array') {
-    // Handle array types
-    return `Vec<${makeRustType(type.collection.elementType)}>`;
-  } else if (type.primitive === 'json') {
-    return 'serde_json::Value'; 
-  } else if (type.type?.isEnumType()) {
-    // // Get the assembly/package name of the current type and the return type
-    // const currentAssembly = type.assembly.name;
-    // const returnTypeAssembly = type.type.assembly.name;
-
-    // // Transform FQN to Rust module path format
-    // let rustType = type.type.fqn;
-
-    // // If the return type is from the same assembly, use relative path
-    // if (currentAssembly === returnTypeAssembly) {
-    //   // Extract just the type name without the package prefix
-    //   rustType = rustType.split('.').pop()!;
-    //   rustType = `crate::${rustType}`;
-    // } else {
-    //   // Otherwise use the full path with the proper Rust module syntax
-    //   rustType = rustType
-    //     .replace(/^@([^/]+)\/([^.]+)\./, '$1_$2::')
-    //     .replace(/-/g, '_')
-    //     .replace(/\./g, '::');
-    // }
-
-    // return rustType;
+function makeRustTypeForProperty(type: any, currentAssemblyName?: string): string {
+  // For property returns, we need to wrap traits in Box<dyn>
+  const baseType = makeRustType(type, currentAssemblyName);
+  
+  // Check if this is a trait (interface) type
+  if (isTraitType(type)) {
+    return `Box<dyn ${baseType}>`;
   }
-  return '()'; // Default case for unsupported types
+  
+  return baseType;
+}
+
+function makeTraitType(type: any, currentAssemblyName?: string): string {
+  // Helper function to get the trait name for use in Box<dyn Trait>
+  if (type.fqn) {
+    const fullPath = convertFqnToRustPath(type.fqn, currentAssemblyName);
+    return fullPath;
+  }
+  
+  // Fallback
+  return 'dyn std::any::Any';
+}
+
+function convertFqnToRustPath(fqn: string, currentAssemblyName?: string): string {
+  const parts = fqn.split('.');
+  const typeName = parts.pop() || '';
+  
+  if (parts.length === 0) {
+    // No assembly/module info, just a type name
+    return typeName;
+  }
+  
+  // First part is the assembly
+  const assemblyName = parts[0];
+  
+  // Map assembly name to crate name
+  const crateName = mapAssemblyToCrateName(assemblyName, currentAssemblyName);
+  
+  if (assemblyName === currentAssemblyName) {
+    // Same assembly - check if there are submodules
+    const submoduleParts = parts.slice(1);
+    
+    if (submoduleParts.length > 0) {
+      // Convert submodule names to snake_case for Rust modules
+      // For paths like "jsii-calc.PythonSelf.StructWithSelf" -> "crate::python_self::StructWithSelf"
+      // For paths like "jsii-calc.submodule.MyClass" -> "crate::submodule::MyClass"
+      
+      const rustSubmodules = submoduleParts.map(part => {
+        // Convert PascalCase to snake_case for module names
+        return part.replace(/([A-Z])/g, (match, letter, index) => {
+          return index === 0 ? letter.toLowerCase() : '_' + letter.toLowerCase();
+        });
+      });
+      
+      return `${crateName}::${rustSubmodules.join('::')}::${typeName}`;
+    } else {
+      // Direct type in current assembly
+      return `${crateName}::${typeName}`;
+    }
+  } else {
+    // External assembly
+    const submodules = parts.slice(1);
+    
+    // Build the full path: crate_name::submodule1::submodule2::TypeName
+    let path = crateName;
+    if (submodules.length > 0) {
+      path += '::' + submodules.join('::');
+    }
+    path += '::' + typeName;
+    
+    return path;
+  }
+}
+
+function mapAssemblyToCrateName(assemblyName: string, currentAssemblyName?: string): string {
+  // If no assembly name, use current crate
+  if (!assemblyName) {
+    return 'crate';
+  }
+  
+  // If same assembly as current, use crate
+  if (assemblyName === currentAssemblyName) {
+    return 'crate';
+  }
+  
+  // Map common assembly names to crate names
+  // Convert @scope/name to scope_name, and jsii-calc to jsii_calc
+  return assemblyName
+    .replace(/^@/, '') // Remove @ prefix
+    .replace(/\//g, '_') // Replace / with _
+    .replace(/-/g, '_'); // Replace - with _
+}
+
+function makeRustType(type: any, currentAssemblyName?: string): string {
+  // Debug logging to help troubleshoot type detection
+  console.log("Type to convert:", 
+    type.primitive || 
+    (type.collection ? `collection:${type.collection.kind}` : 
+     (type.spec?.collection ? `collection:${type.spec.collection.kind}` : "complex type")));
+  
+  // Check for primitive types first
+  if (type.primitive) {
+    if (type.primitive === 'string') return 'String';
+    if (type.primitive === 'number') return 'f64';
+    if (type.primitive === 'boolean') return 'bool';
+    if (type.primitive === 'date') return 'chrono::DateTime<chrono::Utc>';
+    if (type.primitive === 'json') return 'serde_json::Value';
+    
+    // Default for other primitives
+    console.log(`Unhandled primitive type: ${type.primitive}`);
+    return 'serde_json::Value'; 
+  }
+  
+  // Check for collection types - both direct and in TypeReference
+  const collection = type.collection || type.spec?.collection;
+  if (collection) {
+    console.log("Found collection type with kind:", collection.kind);
+    
+    if (collection.kind === 'map') {
+      // Make sure elementtype exists and handle it safely
+      if (!collection.elementtype) {
+        console.log("Map has no elementtype, defaulting to string");
+        return 'std::collections::HashMap<String, String>';
+      }
+      
+      // For interfaces/traits in collections, we need to use the concrete wrapper type
+      // to allow for serialization/deserialization
+      if (collection.elementtype.fqn) {
+        // Check if the element type might be an interface/trait
+        const isElementInterface = (collection.elementtype.type && 
+                                 collection.elementtype.type.isInterfaceType && 
+                                 collection.elementtype.type.isInterfaceType()) ||
+                                (!collection.elementtype.type && (
+                                  collection.elementtype.fqn.includes('Props') || 
+                                  collection.elementtype.fqn.includes('Entry') ||
+                                  collection.elementtype.fqn.endsWith('Obj') ||
+                                  collection.elementtype.fqn.startsWith('I')
+                                ));
+        
+        if (isElementInterface) {
+          // For interface types in collections, use the concrete wrapper implementation
+          const concreteType = makeConcreteWrapperType(collection.elementtype, currentAssemblyName);
+          console.log(`DEBUG: Using concrete wrapper for interface in map: ${collection.elementtype.fqn} -> ${concreteType}`);
+          return `std::collections::HashMap<String, ${concreteType}>`;
+        }
+      }
+      
+      // For non-interface types, use the regular type
+      const valueType = makeRustType(collection.elementtype, currentAssemblyName);
+      return `std::collections::HashMap<String, ${valueType}>`;
+    }
+    
+    if (collection.kind === 'array') {
+      // Make sure elementtype exists and handle it safely
+      if (!collection.elementtype) {
+        console.log("Array has no elementtype, defaulting to string");
+        return 'Vec<String>';
+      }
+      
+      // For interfaces/traits in collections, we need to use the concrete wrapper type
+      // to allow for serialization/deserialization
+      if (collection.elementtype.fqn) {
+        // Check if the element type might be an interface/trait
+        const isElementInterface = (collection.elementtype.type && 
+                                 collection.elementtype.type.isInterfaceType && 
+                                 collection.elementtype.type.isInterfaceType()) ||
+                                (!collection.elementtype.type && (
+                                  collection.elementtype.fqn.includes('Props') || 
+                                  collection.elementtype.fqn.includes('Entry') ||
+                                  collection.elementtype.fqn.endsWith('Obj') ||
+                                  collection.elementtype.fqn.startsWith('I')
+                                ));
+        
+        if (isElementInterface) {
+          // For interface types in collections, use the concrete wrapper implementation
+          const concreteType = makeConcreteWrapperType(collection.elementtype, currentAssemblyName);
+          console.log(`DEBUG: Using concrete wrapper for interface in array: ${collection.elementtype.fqn} -> ${concreteType}`);
+          return `Vec<${concreteType}>`;
+        }
+      }
+      
+      // For non-interface types, use the regular type
+      const elementType = makeRustType(collection.elementtype, currentAssemblyName);
+      return `Vec<${elementType}>`;
+    }
+    
+    console.log(`Unhandled collection kind: ${collection.kind}`);
+    return '()'; // Default for unknown collections
+  }
+  
+  // Check for unions (seen in logs)
+  if (type.spec?.union) {
+    console.log("Found union type");
+    return 'serde_json::Value'; // Use a generic value for unions
+  }
+  
+  // Check for enum types
+  if (type.type?.isEnumType && type.type.isEnumType()) {
+    console.log("Found enum type");
+    return 'String'; // Default representation for enums
+  }
+
+  // Handle complex types (structs, interfaces, classes)
+  if (type.fqn) {
+    // Convert FQN to Rust path
+    const parts = type.fqn.split('.');
+    const typeName = parts.pop() || '';
+    
+    // Handle the full path including assembly and submodules
+    const fullPath = convertFqnToRustPath(type.fqn, currentAssemblyName);
+    
+    // Check if this is a trait (interface) type
+    const isInterface = (type.type && type.type.isInterfaceType && type.type.isInterfaceType()) ||
+                       (!type.type && (
+                         type.fqn.includes('Props') || 
+                         type.fqn.includes('Entry') ||
+                         type.fqn.startsWith('I')
+                       ));
+    
+    if (isInterface) {
+      console.log(`Found interface type with FQN: ${type.fqn}, generating concrete wrapper: ${fullPath}Impl`);
+      // For interfaces, return a concrete wrapper type that can be serialized
+      return `${fullPath}Impl`;
+    }
+    
+    console.log(`Found complex/reference type with FQN: ${type.fqn}, Current: ${currentAssemblyName}, Rust type: ${fullPath}`);
+    return fullPath;
+  }
+  
+  // Default case
+  console.log("Unable to determine type:", 
+    type.constructor ? type.constructor.name : typeof type);
+  return '()';
+}
+
+function isTraitType(type: any): boolean {
+  console.log("DEBUG: isTraitType called with type.fqn:", type.fqn, "type.primitive:", type.primitive);
+  
+  // For collections, we don't want to use trait objects because they can't be easily serialized
+  // Rust doesn't allow trait objects (Box<dyn Trait>) in collections that need to be serialized/deserialized
+  // Instead, we'll always generate concrete wrapper types for interfaces
+  // These concrete wrappers have a `jsii_object_ref` field and implement the trait, allowing both serialization and API compliance
+  // So we return false here to avoid Box<dyn> wrapping in collections and always use concrete types
+  
+  // Check if it's a trait (interface) type by examining various properties
+  if (type.type && type.type.isInterfaceType && type.type.isInterfaceType()) {
+    console.log("DEBUG: Found trait via type.type.isInterfaceType - but using concrete type for serialization");
+    return false; // Use concrete types instead of trait objects
+  }
+  
+  // Alternative check: if it has an FQN, we can look up the type definition
+  if (type.fqn && type.type) {
+    const result = type.type.isInterfaceType && type.type.isInterfaceType();
+    console.log("DEBUG: Found trait via type.fqn and type.type.isInterfaceType:", result, "- but using concrete type");
+    return false; // Use concrete types instead of trait objects
+  }
+  
+  // Check if it's a direct reference to an interface by examining known interface FQNs
+  if (type.fqn && !type.type) {
+    // This is a heuristic based on known interface patterns
+    // Only treat as trait if it matches known interface patterns
+    const knownInterfaceFqns = [
+      'jsii-calc.DummyObj',
+      '@scope/jsii-calc-base.BaseProps',
+      'scope_jsii_calc_lib.submodule.ReflectableEntry'
+    ];
+    
+    const isKnownInterface = knownInterfaceFqns.includes(type.fqn) || 
+                           type.fqn.includes('Props') || 
+                           type.fqn.includes('Entry') ||
+                           type.fqn.endsWith('Obj') ||  // Common suffix for interface types like DummyObj
+                           type.fqn.startsWith('I'); // Interface naming convention
+    
+    console.log("DEBUG: Found FQN without type object, checking if known interface:", type.fqn, "isKnownInterface:", isKnownInterface, "- but using concrete type");
+    return false; // Use concrete types instead of trait objects for now
+  }
+  
+  console.log("DEBUG: No trait type detected");
+  return false;
+}
+
+function makeConcreteWrapperType(type: any, currentAssemblyName?: string): string {
+  // For interface types, generate a concrete wrapper struct name
+  // This allows for serialization while maintaining the interface API
+  
+  if (type.fqn) {
+    const fullPath = convertFqnToRustPath(type.fqn, currentAssemblyName);
+    
+    // Check if it's an interface type (trait)
+    const isInterface = (type.type && type.type.isInterfaceType && type.type.isInterfaceType()) ||
+                       (!type.type && (
+                         type.fqn.includes('Props') || 
+                         type.fqn.includes('Entry') ||
+                         type.fqn.endsWith('Obj') ||
+                         type.fqn.startsWith('I')
+                       ));
+    
+    if (isInterface) {
+      // For interfaces, we generate a concrete wrapper type
+      // The wrapper will have the same name but will be a struct instead of a trait
+      // This struct implements the trait and has a public jsii_object_ref field
+      // allowing it to be serialized/deserialized while maintaining API compatibility
+      console.log(`DEBUG: Generating concrete wrapper for interface: ${type.fqn} -> ${fullPath}Impl`);
+      return `${fullPath}Impl`;
+    }
+    
+    return fullPath;
+  }
+  
+  return makeRustType(type, currentAssemblyName);
 }

@@ -57,6 +57,8 @@ export function emitMethod(code: CodeMaker, method: Method, fqn: string, assembl
             code.line('todo!();');
         }
     } else {
+        // For trait implementations and declarations, we don't use 'pub' since traits control visibility
+        // For struct methods, we use 'pub'
         if (isRustInterface) {
             code.openBlock(`fn ${methodName}(&self)${returns || ''}`);
         } else {

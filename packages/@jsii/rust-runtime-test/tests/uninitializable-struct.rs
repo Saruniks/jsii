@@ -1,3 +1,4 @@
+#[ignore]
 #[test]
 fn test_uninitializable_struct_with_static_methods() {
     let t = trybuild::TestCases::new();

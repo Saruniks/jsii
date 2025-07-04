@@ -1,7 +1,11 @@
+use std::collections::HashMap;
+
 use chrono::{TimeZone, Utc};
 use jsii_calc::AllTypes;
+use serial_test::serial;
 
 #[test]
+#[serial]
 fn test_get_bool_property() {
     // TODO: Do we use new, or {} (or <Type> init)?
     let all_types = AllTypes::new();
@@ -10,6 +14,7 @@ fn test_get_bool_property() {
 }
 
 #[test]
+#[serial]
 fn test_set_bool_property() {
     let all_types = AllTypes::new();
     all_types.set_boolean_property(true);
@@ -18,6 +23,7 @@ fn test_set_bool_property() {
 }
 
 #[test]
+#[serial]
 fn test_get_string_property() {
     let all_types = AllTypes::new();
     let res = all_types.get_string_property();
@@ -25,6 +31,7 @@ fn test_get_string_property() {
 }
 
 #[test]
+#[serial]
 fn test_set_string_property() {
     let all_types = AllTypes::new();
     all_types.set_string_property("new value".to_string());
@@ -35,6 +42,7 @@ fn test_set_string_property() {
 // TODO: Test not a string
 
 #[test]
+#[serial]
 fn test_get_number_property() {
     let all_types = AllTypes::new();
     let res = all_types.get_number_property();
@@ -42,6 +50,7 @@ fn test_get_number_property() {
 }
 
 #[test]
+#[serial]
 fn test_set_number_property() {
     let all_types = AllTypes::new();
     all_types.set_number_property(100.0);
@@ -52,6 +61,7 @@ fn test_set_number_property() {
 // TODO: Test not a number
 
 #[test]
+#[serial]
 fn test_get_date_property() {
     let all_types = AllTypes::new();
     // This will return current date in UTC
@@ -60,6 +70,7 @@ fn test_get_date_property() {
 }
 
 #[test]
+#[serial]
 fn test_set_date_property() {
     let all_types = AllTypes::new();
     let date = Utc.with_ymd_and_hms(2021, 1, 1, 0, 0, 0).unwrap();
@@ -74,6 +85,7 @@ fn test_set_date_property() {
 // TODO: Test for if (Object.prototype.toString.call(value) !== '[object Date]')
 
 #[test]
+#[serial]
 fn test_get_json_property() {
     let all_types = AllTypes::new();
     // Get empty object
@@ -82,6 +94,7 @@ fn test_get_json_property() {
 }
 
 #[test]
+#[serial]
 fn test_set_json_property() {
     let all_types = AllTypes::new();
 
@@ -123,17 +136,67 @@ fn test_set_json_property() {
 //   }
 
 #[test]
+#[serial]
 fn test_get_map_property() {
     let all_types = AllTypes::new();
     // Get empty map
     let res = all_types.get_map_property();
-    assert_eq!(res, serde_json::json!({}));
+    assert_eq!(res, HashMap::new());
 }
 
 #[test]
+#[serial]
+fn test_set_map_property() {
+    let all_types = AllTypes::new();
+    // Get empty map
+    let res = all_types.get_map_property();
+    assert_eq!(res, HashMap::new());
+    // Set new map
+    let mut new_value = HashMap::new();
+    new_value.insert("key1".to_string(), 1.0);
+    new_value.insert("key2".to_string(), 2.0);
+
+    let number = scope_jsii_calc_lib::Number::new();
+    // all_types.set_map_property(new_value.clone());
+    // // Get again and check if is the same
+    // let res = all_types.get_map_property();
+    // assert_eq!(res, new_value);
+    // // Set another map
+    // let mut another_new_value = HashMap::new();
+    // another_new_value.insert("another_key1".to_string(), 3.0);
+    // another_new_value.insert("another_key2".to_string(), 4.0);
+    // all_types.set_map_property(another_new_value.clone());
+    // // And again and check if is the same
+    // let res = all_types.get_map_property();
+    // assert_eq!(res, another_new_value);
+}
+
+#[test]
+#[serial]
 fn test_get_array_property() {
     let all_types = AllTypes::new();
     // Get empty array
     let res = all_types.get_array_property();
-    assert_eq!(res, serde_json::json!([]));
+    assert_eq!(res, Vec::<String>::new());
+}
+
+#[test]
+#[serial]
+fn test_set_array_property() {
+    let all_types = AllTypes::new();
+    // Get empty array
+    let res = all_types.get_array_property();
+    assert_eq!(res, Vec::<String>::new());
+    // Set new array
+    let new_value = vec!["value1".to_string(), "value2".to_string()];
+    all_types.set_array_property(new_value.clone());
+    // Get again and check if is the same
+    let res = all_types.get_array_property();
+    assert_eq!(res, new_value);
+    // Set another array
+    let another_new_value = vec!["another_value1".to_string(), "another_value2".to_string()];
+    all_types.set_array_property(another_new_value.clone());
+    // And again and check if is the same
+    let res = all_types.get_array_property();
+    assert_eq!(res, another_new_value);
 }

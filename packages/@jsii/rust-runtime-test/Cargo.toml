@@ -6,8 +6,10 @@ edition = "2024"
 [dependencies]
 jsii-rust-runtime = { path = "../jsii-rust-runtime" }
 jsii-calc = { path = "../../../output/rust/jsii-calc" }
+scope-jsii-calc-lib = { path = "../../../output/rust/scope-jsii-calc-lib" }
 
 [dev-dependencies]
 trybuild = "1.0.105"
 chrono = "0.4"
 serde_json = "1"
+serial_test = "3.2"

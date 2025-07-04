@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, ChildStderr, ChildStdin, ChildStdout, Command};
 use std::sync::{Mutex, OnceLock};
@@ -14,13 +15,20 @@ struct JsiiRuntimeInner {
 }
 
 use serde::{Deserialize, Serialize};
-#[derive(Deserialize, Serialize)]
-pub struct JsiiObject {
-    // Could it be an array of key-value pairs?
-    // TODO: Maybe type should be enum $jsii.enum, $jsii.{other_types} ...
-    pub key: String,
 
-    pub value: String,
+// JSII serialization tokens
+pub const TOKEN_REF: &str = "$jsii.byref";
+pub const TOKEN_INTERFACES: &str = "$jsii.interfaces";
+pub const TOKEN_DATE: &str = "$jsii.date";
+pub const TOKEN_ENUM: &str = "$jsii.enum";
+pub const TOKEN_MAP: &str = "$jsii.map";
+pub const TOKEN_STRUCT: &str = "$jsii.struct";
+
+// Struct for deserializing JSII map objects
+#[derive(Deserialize, Serialize, Debug)]
+pub struct JsiiMap {
+    #[serde(rename = "$jsii.map")]
+    pub map: HashMap<String, Value>,
 }
 
 /// Global singleton for JSII runtime
@@ -361,6 +369,30 @@ impl JsiiRuntime {
                                         .and_then(|v| {
                                             serde_json::from_value(v).map_err(|e| e.to_string())
                                         });
+                                }
+                            } else if obj.contains_key(TOKEN_MAP) {
+                                // This is a map object
+                                println!("DEBUG: Detected JSII map token");
+
+                                // Special handling if T is a HashMap
+                                let type_name = std::any::type_name::<T>();
+                                if type_name.contains("HashMap") {
+                                    // Use our special deserializer for maps
+                                    return deserialize_jsii_map::<serde_json::Value>(
+                                        result.clone(),
+                                    )
+                                    .and_then(|map| {
+                                        serde_json::to_value(map)
+                                            .map_err(|e| format!("Failed to convert map: {}", e))
+                                            .and_then(|v| {
+                                                serde_json::from_value::<T>(v).map_err(|e| {
+                                                    format!(
+                                                        "Failed to convert to target type: {}",
+                                                        e
+                                                    )
+                                                })
+                                            })
+                                    });
                                 }
                             }
                         }
@@ -707,6 +739,49 @@ impl JsiiRuntime {
 
         println!("Successfully loaded module {}", name);
         Ok(())
+    }
+}
+
+/// Helper function to check if a JSON value contains a JSII map token
+pub fn is_jsii_map(value: &Value) -> bool {
+    if let Value::Object(obj) = value {
+        obj.contains_key(TOKEN_MAP)
+    } else {
+        false
+    }
+}
+
+/// Helper function to deserialize a JSII map
+pub fn deserialize_jsii_map<T>(value: Value) -> Result<HashMap<String, T>, String>
+where
+    T: serde::de::DeserializeOwned,
+{
+    if is_jsii_map(&value) {
+        // Try to deserialize as a JsiiMap first
+        match serde_json::from_value::<JsiiMap>(value) {
+            Ok(jsii_map) => {
+                // Now convert the inner map values to the desired type
+                let mut result = HashMap::new();
+                for (key, val) in jsii_map.map {
+                    match serde_json::from_value::<T>(val) {
+                        Ok(typed_val) => {
+                            result.insert(key, typed_val);
+                        }
+                        Err(e) => {
+                            return Err(format!("Failed to deserialize map value: {}", e));
+                        }
+                    }
+                }
+                Ok(result)
+            }
+            Err(e) => Err(format!("Failed to deserialize JSII map: {}", e)),
+        }
+    } else {
+        // If it's not a JSII map token, try to deserialize directly as a HashMap
+        match serde_json::from_value::<HashMap<String, T>>(value) {
+            Ok(map) => Ok(map),
+            Err(e) => Err(format!("Failed to deserialize as HashMap: {}", e)),
+        }
     }
 }
 
