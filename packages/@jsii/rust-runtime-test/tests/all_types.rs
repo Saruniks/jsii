@@ -391,55 +391,67 @@ fn test_set_union_property() {
 }
 
 // Tests for union_array_property
-// NOTE: Union arrays require actual values, not unit types
-// The current generator uses Vec<()> which serializes to null values
-// These tests are disabled until the generator is fixed to handle union types properly
-// #[test]
-// #[serial]
-// fn test_get_union_array_property() {
-//     let all_types = AllTypes::new();
-//     let result = all_types.get_union_array_property();
-//     assert_eq!(result, Vec::<()>::new());
-// }
+#[test]
+#[serial]
+fn test_get_union_array_property() {
+    let all_types = AllTypes::new();
+    let result = all_types.get_union_array_property();
+    // Should return empty array by default
+    assert_eq!(result, Vec::<serde_json::Value>::new());
+}
 
-// #[test]
-// #[serial]
-// fn test_set_union_array_property() {
-//     let all_types = AllTypes::new();
-//
-//     // Test with union array (note: () is used as placeholder for union types)
-//     let union_array = vec![(); 3]; // Array of unit types representing union values
-//     all_types.set_union_array_property(union_array.clone());
-//     let result = all_types.get_union_array_property();
-//     assert_eq!(result, union_array);
-// }
+#[test]
+#[serial]
+fn test_set_union_array_property() {
+    let all_types = AllTypes::new();
+
+    // Test with union array containing different types (number and complex objects would be valid)
+    let union_array = vec![
+        serde_json::json!(42),      // number type
+        serde_json::json!(123.5),   // another number
+    ];
+    all_types.set_union_array_property(union_array.clone());
+    let result = all_types.get_union_array_property();
+    assert_eq!(result, union_array);
+
+    // Test with empty array
+    let empty_array = vec![];
+    all_types.set_union_array_property(empty_array.clone());
+    let result = all_types.get_union_array_property();
+    assert_eq!(result, empty_array);
+}
 
 // Tests for union_map_property
-// NOTE: Union maps require actual values, not unit types
-// The current generator uses HashMap<String, ()> which serializes to null values
-// These tests are disabled until the generator is fixed to handle union types properly
-// #[test]
-// #[serial]
-// fn test_get_union_map_property() {
-//     let all_types = AllTypes::new();
-//     let result = all_types.get_union_map_property();
-//     assert_eq!(result, HashMap::<String, ()>::new());
-// }
+#[test]
+#[serial]
+fn test_get_union_map_property() {
+    let all_types = AllTypes::new();
+    let result = all_types.get_union_map_property();
+    // Should return empty map by default
+    assert_eq!(result, HashMap::<String, serde_json::Value>::new());
+}
 
-// #[test]
-// #[serial]
-// fn test_set_union_map_property() {
-//     let all_types = AllTypes::new();
-//
-//     // Test with union map (note: () is used as placeholder for union types)
-//     let mut union_map = HashMap::new();
-//     union_map.insert("key1".to_string(), ());
-//     union_map.insert("key2".to_string(), ());
-//
-//     all_types.set_union_map_property(union_map.clone());
-//     let result = all_types.get_union_map_property();
-//     assert_eq!(result, union_map);
-// }
+#[test]
+#[serial]
+fn test_set_union_map_property() {
+    let all_types = AllTypes::new();
+
+    // Test with union map containing different value types (LibNumber | number | string)
+    let mut union_map = HashMap::new();
+    union_map.insert("number_key".to_string(), serde_json::json!(42));
+    union_map.insert("string_key".to_string(), serde_json::json!("test string"));
+    union_map.insert("float_key".to_string(), serde_json::json!(123.5));
+
+    all_types.set_union_map_property(union_map.clone());
+    let result = all_types.get_union_map_property();
+    assert_eq!(result, union_map);
+
+    // Test with empty map
+    let empty_map = HashMap::new();
+    all_types.set_union_map_property(empty_map.clone());
+    let result = all_types.get_union_map_property();
+    assert_eq!(result, empty_map);
+}
 
 // Tests for unknown_property
 #[test]
@@ -561,21 +573,31 @@ fn test_get_optional_enum_value() {
     let result = all_types.get_optional_enum_value();
     println!("Optional enum value: {:?}", result);
     // The generator should return Option<String> for optional properties
-    // If it's None initially, that's expected
+    // Since it's optional and starts as None/undefined, it should be None
+    assert_eq!(result, None);
 }
 
 #[test]
 #[serial]
 fn test_set_optional_enum_value() {
-    let _all_types = AllTypes::new();
-    // Test setting the optional enum value
-    // Note: The current generator might expect String instead of Option<String>
-    // This depends on the implementation
+    let all_types = AllTypes::new();
 
-    // For now, comment out the setter test until the generator is fixed
-    // all_types.set_optional_enum_value(Some("jsii-calc.StringEnum/A".to_string()));
-    // let result = all_types.get_optional_enum_value();
-    // assert_eq!(result, Some("jsii-calc.StringEnum/A".to_string()));
+    // Test that initially the optional enum value is None
+    let initial_result = all_types.get_optional_enum_value();
+    assert_eq!(initial_result, None);
 
-    println!("Setter test skipped - waiting for generator fix");
+    // Test setting the optional enum value to Some(value)
+    all_types.set_optional_enum_value(Some("jsii-calc.StringEnum/A".to_string()));
+    let result = all_types.get_optional_enum_value();
+    assert_eq!(result, Some("jsii-calc.StringEnum/A".to_string()));
+
+    // Test setting a different enum value
+    all_types.set_optional_enum_value(Some("jsii-calc.StringEnum/B".to_string()));
+    let result = all_types.get_optional_enum_value();
+    assert_eq!(result, Some("jsii-calc.StringEnum/B".to_string()));
+
+    // Test setting the optional enum value back to None
+    all_types.set_optional_enum_value(None);
+    let result = all_types.get_optional_enum_value();
+    assert_eq!(result, None);
 }

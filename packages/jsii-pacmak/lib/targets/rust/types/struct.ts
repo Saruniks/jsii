@@ -98,21 +98,25 @@ export class RustStruct extends RustType<ClassType> {
             if (isEnum) {
               // For enum types, we need to extract the enum value from the $jsii.enum object
               code.line(`{`);
-              code.line(`  let json_response: serde_json::Value = jsii_rust_runtime::JsiiRuntime::get(&self.jsii_object_ref, "${substituteReservedWords(property.name)}").expect("JsiiRuntime::get failed");`);
               
               if (property.optional) {
-                // For optional enum properties, handle null/undefined values
-                code.line(`  // Handle optional enum: check if the value is null/undefined`);
-                code.line(`  if json_response.is_null() {`);
-                code.line(`    None`);
-                code.line(`  } else if let Some(enum_value) = json_response.get("$jsii.enum").and_then(|v| v.as_str()) {`);
-                code.line(`    Some(enum_value.to_string())`);
-                code.line(`  } else {`);
-                code.line(`    // If it's not in enum format, try to return as-is (for default values)`);
-                code.line(`    json_response.as_str().map(|s| s.to_string())`);
+                // For optional enum properties, we need to handle the case where the property might be undefined
+                // In this case, the JSII runtime might return success with no value field
+                code.line(`  match jsii_rust_runtime::JsiiRuntime::get::<Option<serde_json::Value>>(&self.jsii_object_ref, "${substituteReservedWords(property.name)}") {`);
+                code.line(`    Ok(Some(json_response)) => {`);
+                code.line(`      // Try to extract enum value from {"$jsii.enum": "fqn/VALUE"} format`);
+                code.line(`      if let Some(enum_value) = json_response.get("$jsii.enum").and_then(|v| v.as_str()) {`);
+                code.line(`        Some(enum_value.to_string())`);
+                code.line(`      } else {`);
+                code.line(`        // If it's not in enum format, try to return as-is (for default values)`);
+                code.line(`        json_response.as_str().map(|s| s.to_string())`);
+                code.line(`      }`);
+                code.line(`    }`);
+                code.line(`    Ok(None) | Err(_) => None, // Property is undefined or error occurred`);
                 code.line(`  }`);
               } else {
                 // For required enum properties, the value must be present
+                code.line(`  let json_response: serde_json::Value = jsii_rust_runtime::JsiiRuntime::get(&self.jsii_object_ref, "${substituteReservedWords(property.name)}").expect("JsiiRuntime::get failed");`);
                 code.line(`  // Extract enum value from {"$jsii.enum": "fqn/VALUE"} format`);
                 code.line(`  if let Some(enum_value) = json_response.get("$jsii.enum").and_then(|v| v.as_str()) {`);
                 code.line(`    enum_value.to_string()`);
@@ -326,7 +330,13 @@ function makeRustTypeConversion(type: any): string {
     const isComplexElement = collection.elementtype?.fqn || 
                           (collection.elementtype?.type && !collection.elementtype.primitive);
     
-    if (isComplexElement) {
+    // Check if the element type is a union type
+    const isUnionElement = collection.elementtype?.union;
+    
+    if (isUnionElement) {
+      // For maps with union elements, use standard serialization
+      return 'serde_json::json!({"$jsii.map": serde_json::to_value(&value).expect("Failed to serialize union map")})';
+    } else if (isComplexElement) {
       // For maps with complex objects, we need to transform each value to have $jsii.byref
       return `{
         let mut transformed_map = serde_json::Map::new();
@@ -357,7 +367,13 @@ function makeRustTypeConversion(type: any): string {
     const isComplexElement = collection.elementtype?.fqn || 
                           (collection.elementtype?.type && !collection.elementtype.primitive);
     
-    if (isComplexElement) {
+    // Check if the element type is a union type
+    const isUnionElement = collection.elementtype?.union;
+    
+    if (isUnionElement) {
+      // For arrays with union elements, use standard serialization
+      return 'serde_json::to_value(&value).expect("Failed to serialize union array")';
+    } else if (isComplexElement) {
       // For arrays with complex objects, transform each element
       return `{
         let mut transformed_array = Vec::new();
@@ -526,13 +542,15 @@ function makeRustType(type: any, currentAssemblyName?: string): string {
   // Check for collection types - both direct and in TypeReference
   const collection = type.collection || type.spec?.collection;
   if (collection) {
-    console.log("Found collection type with kind:", collection.kind);
-    
+    // Handle map collections
     if (collection.kind === 'map') {
-      // Make sure elementtype exists and handle it safely
       if (!collection.elementtype) {
-        console.log("Map has no elementtype, defaulting to string");
         return 'std::collections::HashMap<String, String>';
+      }
+      // If element type is a union, use serde_json::Value
+      if (collection.elementtype?.union) {
+        console.log("Found union type in map element, using serde_json::Value");
+        return 'std::collections::HashMap<String, serde_json::Value>';
       }
       
       // For interfaces/traits in collections, we need to use the concrete wrapper type
@@ -562,11 +580,15 @@ function makeRustType(type: any, currentAssemblyName?: string): string {
       return `std::collections::HashMap<String, ${valueType}>`;
     }
     
+    // Handle array collections
     if (collection.kind === 'array') {
-      // Make sure elementtype exists and handle it safely
       if (!collection.elementtype) {
-        console.log("Array has no elementtype, defaulting to string");
         return 'Vec<String>';
+      }
+      // If element type is a union, use serde_json::Value
+      if (collection.elementtype?.union) {
+        console.log("Found union type in array element, using serde_json::Value");
+        return 'Vec<serde_json::Value>';
       }
       
       // For interfaces/traits in collections, we need to use the concrete wrapper type
@@ -591,6 +613,12 @@ function makeRustType(type: any, currentAssemblyName?: string): string {
         }
       }
       
+      // Check if the element type is a union type
+      if (collection.elementtype.union) {
+        console.log("Found union type in array element, using serde_json::Value");
+        return 'Vec<serde_json::Value>';
+      }
+      
       // For non-interface types, use the regular type
       const elementType = makeRustType(collection.elementtype, currentAssemblyName);
       return `Vec<${elementType}>`;
@@ -600,8 +628,8 @@ function makeRustType(type: any, currentAssemblyName?: string): string {
     return '()'; // Default for unknown collections
   }
   
-  // Check for unions (seen in logs)
-  if (type.spec?.union) {
+  // Check for unions (direct union types)
+  if (type.union || type.spec?.union) {
     console.log("Found union type");
     return 'serde_json::Value'; // Use a generic value for unions
   }
