@@ -84,7 +84,23 @@ export class RustStruct extends RustType<ClassType> {
             const isPrimitive = property.type.primitive;
             console.log(`DEBUG: Property ${property.name}, isPrimitive: ${isPrimitive}, type:`, property.type);
             
-            if (isPrimitive) {
+            // Check if it's an enum type
+            const isEnum = property.type.type?.isEnumType && property.type.type.isEnumType();
+            console.log(`DEBUG: Property ${property.name}, isEnum: ${isEnum}`);
+            
+            if (isEnum) {
+              // For enum types, we need to extract the enum value from the $jsii.enum object
+              code.line(`{`);
+              code.line(`  let json_response: serde_json::Value = jsii_rust_runtime::JsiiRuntime::get(&self.jsii_object_ref, "${substituteReservedWords(property.name)}").expect("JsiiRuntime::get failed");`);
+              code.line(`  // Extract enum value from {"$jsii.enum": "fqn/VALUE"} format`);
+              code.line(`  if let Some(enum_value) = json_response.get("$jsii.enum").and_then(|v| v.as_str()) {`);
+              code.line(`    enum_value.to_string()`);
+              code.line(`  } else {`);
+              code.line(`    // If it's not in enum format, try to return as-is (for default values)`);
+              code.line(`    json_response.as_str().unwrap_or("").to_string()`);
+              code.line(`  }`);
+              code.line(`}`);
+            } else if (isPrimitive) {
               // For primitive types, use the generic getter
               code.line(`jsii_rust_runtime::JsiiRuntime::get(&self.jsii_object_ref, "${substituteReservedWords(property.name)}").expect("JsiiRuntime::get failed")`);
             } else {
@@ -203,8 +219,16 @@ export class RustStruct extends RustType<ClassType> {
         // Check if this is a trait (interface) type
         const traitTypePropertySetter = isTraitType(property.type);
         
+        // Check if this is an enum type for the setter
+        const isEnumSetter = property.type.type?.isEnumType && property.type.type.isEnumType();
+        
         if (this.type.initializer && !traitTypePropertySetter) {
-          code.line(`let jsii_res = jsii_rust_runtime::JsiiRuntime::set(&self.jsii_object_ref, "${substituteReservedWords(property.name)}", &${makeRustTypeConversion(property.type)}).expect("JsiiRuntiem::invoke panic");`);
+          if (isEnumSetter) {
+            // For enum setters, wrap the string value in the JSII enum format
+            code.line(`let jsii_res = jsii_rust_runtime::JsiiRuntime::set(&self.jsii_object_ref, "${substituteReservedWords(property.name)}", &serde_json::json!({"$jsii.enum": value})).expect("JsiiRuntiem::invoke panic");`);
+          } else {
+            code.line(`let jsii_res = jsii_rust_runtime::JsiiRuntime::set(&self.jsii_object_ref, "${substituteReservedWords(property.name)}", &${makeRustTypeConversion(property.type)}).expect("JsiiRuntiem::invoke panic");`);
+          }
         } else {
           code.line(`todo!();`);
         }

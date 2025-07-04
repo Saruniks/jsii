@@ -326,27 +326,34 @@ fn test_set_any_map_property() {
 }
 
 // Tests for enum_property
-// NOTE: Enum properties are returned as {"$jsii.enum": "fqn/VALUE"} objects, not strings
-// The current generator doesn't handle this properly, so these tests are disabled
-// #[test]
-// #[serial]
-// fn test_get_enum_property() {
-//     let all_types = AllTypes::new();
-//     let result = all_types.get_enum_property();
-//     // Should return the default enum value
-//     assert!(!result.is_empty());
-// }
+#[test]
+#[serial]
+fn test_get_enum_property() {
+    let all_types = AllTypes::new();
+    let result = all_types.get_enum_property();
+    // Should return the default enum value AllTypesEnum.THIS_IS_GREAT
+    // The FQN format should be "jsii-calc.AllTypesEnum/THIS_IS_GREAT"
+    assert_eq!(result, "jsii-calc.AllTypesEnum/THIS_IS_GREAT".to_string());
+}
 
-// #[test]
-// #[serial]
-// fn test_set_enum_property() {
-//     let all_types = AllTypes::new();
-//     
-//     // Test setting enum values
-//     all_types.set_enum_property("jsii-calc.AllTypesEnum/MY_ENUM_VALUE".to_string());
-//     let result = all_types.get_enum_property();
-//     assert_eq!(result, "jsii-calc.AllTypesEnum/MY_ENUM_VALUE".to_string());
-// }
+#[test]
+#[serial]
+fn test_set_enum_property() {
+    let all_types = AllTypes::new();
+    
+    // Test setting enum values using the FQN format
+    all_types.set_enum_property("jsii-calc.AllTypesEnum/MY_ENUM_VALUE".to_string());
+    let result = all_types.get_enum_property();
+    assert_eq!(result, "jsii-calc.AllTypesEnum/MY_ENUM_VALUE".to_string());
+    
+    all_types.set_enum_property("jsii-calc.AllTypesEnum/YOUR_ENUM_VALUE".to_string());
+    let result = all_types.get_enum_property();
+    assert_eq!(result, "jsii-calc.AllTypesEnum/YOUR_ENUM_VALUE".to_string());
+    
+    all_types.set_enum_property("jsii-calc.AllTypesEnum/THIS_IS_GREAT".to_string());
+    let result = all_types.get_enum_property();
+    assert_eq!(result, "jsii-calc.AllTypesEnum/THIS_IS_GREAT".to_string());
+}
 
 // Tests for union_property  
 #[test]
@@ -534,14 +541,13 @@ fn test_set_unknown_map_property() {
 }
 
 // Tests for optional_enum_value
-// NOTE: Optional enum values are also returned as {"$jsii.enum": "fqn/VALUE"} objects
-// The current generator doesn't handle this properly, so these tests are disabled
+// NOTE: Optional properties may not be generated in the current Rust generator
+// These tests are disabled until optional property generation is implemented
 // #[test]
 // #[serial]
 // fn test_get_optional_enum_value() {
 //     let all_types = AllTypes::new();
 //     let result = all_types.get_optional_enum_value();
-//     // Optional enum might be empty or have a default value
 //     println!("Optional enum value: {}", result);
 // }
 
@@ -549,8 +555,6 @@ fn test_set_unknown_map_property() {
 // #[serial]
 // fn test_set_optional_enum_value() {
 //     let all_types = AllTypes::new();
-//     
-//     // Test setting optional enum values
 //     all_types.set_optional_enum_value("jsii-calc.StringEnum/A".to_string());
 //     let result = all_types.get_optional_enum_value();
 //     assert_eq!(result, "jsii-calc.StringEnum/A".to_string());
