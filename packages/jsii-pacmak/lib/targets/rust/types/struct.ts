@@ -164,7 +164,7 @@ export class RustStruct extends RustType<ClassType> {
   }
 }
 
-// TODO: Do we need to handle json here to pass as-in?
+// Convert Rust types to JSII serialization format
 function makeRustTypeConversion(type: any): string {
   // Extract collection from either direct or TypeReference
   const collection = type.collection || type.spec?.collection;
@@ -172,9 +172,68 @@ function makeRustTypeConversion(type: any): string {
   if (type.primitive === 'date') {
     return 'serde_json::json!({"$jsii.date": serde_json::to_value(value).unwrap()})';
   } else if (collection?.kind === 'map') {
-    return 'serde_json::to_value(&value).expect("Failed to serialize map value")';
+    // For maps, we need to convert each value to the proper JSII format
+    // Maps with complex objects need special handling
+    
+    // Check if the element type is a complex object (class/interface)
+    const isComplexElement = collection.elementtype?.fqn || 
+                          (collection.elementtype?.type && !collection.elementtype.primitive);
+    
+    if (isComplexElement) {
+      // For maps with complex objects, we need to transform each value to have $jsii.byref
+      return `{
+        let mut transformed_map = serde_json::Map::new();
+        for (key, val) in value.iter() {
+          // Get the value as a JSON string first (this avoids private field issues)
+          let val_json = serde_json::to_string(val).expect("Failed to serialize map value");
+          // Parse it back to access the jsii_object_ref field
+          let val_parsed: serde_json::Value = serde_json::from_str(&val_json).expect("Failed to parse value JSON");
+          // Extract the jsii_object_ref field value
+          let obj_ref = val_parsed.get("jsii_object_ref")
+            .and_then(|v| v.as_str())
+            .expect("Failed to get jsii_object_ref from map value")
+            .to_string();
+          // Create the proper JSII reference
+          transformed_map.insert(
+            key.clone(),
+            serde_json::json!({"$jsii.byref": obj_ref})
+          );
+        }
+        serde_json::json!({"$jsii.map": transformed_map})
+      }`;
+    } else {
+      // For maps with primitive values, use the standard serialization
+      return 'serde_json::json!({"$jsii.map": serde_json::to_value(&value).expect("Failed to serialize map")})';
+    }
   } else if (collection?.kind === 'array') {
-    return 'serde_json::to_value(&value).expect("Failed to serialize array value")';
+    // For arrays, check if elements are complex objects
+    const isComplexElement = collection.elementtype?.fqn || 
+                          (collection.elementtype?.type && !collection.elementtype.primitive);
+    
+    if (isComplexElement) {
+      // For arrays with complex objects, transform each element
+      return `{
+        let mut transformed_array = Vec::new();
+        for val in value.iter() {
+          // Get the value as a JSON string first (this avoids private field issues)
+          let val_json = serde_json::to_string(val).expect("Failed to serialize array value");
+          // Parse it back to access the jsii_object_ref field
+          let val_parsed: serde_json::Value = serde_json::from_str(&val_json).expect("Failed to parse value JSON");
+          // Extract the jsii_object_ref field value
+          let obj_ref = val_parsed.get("jsii_object_ref")
+            .and_then(|v| v.as_str())
+            .expect("Failed to get jsii_object_ref from array value")
+            .to_string();
+          // Create the proper JSII reference
+          transformed_array.push(serde_json::json!({"$jsii.byref": obj_ref}));
+        }
+        serde_json::json!({"$jsii.array": transformed_array})
+      }`;
+    } else {
+      // For arrays with primitive values
+      // Primitive arrays don't need conversion, just serialize them directly
+      return 'serde_json::json!({"$jsii.array": value})';
+    }
   } else if (type.primitive) {
     return 'serde_json::to_value(&value).expect("Failed to serialize value")';
   } else if (type.type?.isEnumType()) {
@@ -182,7 +241,19 @@ function makeRustTypeConversion(type: any): string {
   } else if (type.spec?.union) {
     return 'serde_json::to_value(&value).expect("Failed to serialize union value")';
   } else {
-    return 'serde_json::json!({"$jsii.byref": self.jsii_object_ref.clone()})';
+    return `{
+      // Get the value as a JSON string first (this avoids private field issues)
+      let val_json = serde_json::to_string(&value).expect("Failed to serialize object value");
+      // Parse it back to access the jsii_object_ref field
+      let val_parsed: serde_json::Value = serde_json::from_str(&val_json).expect("Failed to parse value JSON");
+      // Extract the jsii_object_ref field value
+      let obj_ref = val_parsed.get("jsii_object_ref")
+        .and_then(|v| v.as_str())
+        .expect("Failed to get jsii_object_ref from object")
+        .to_string();
+      // Create the proper JSII reference
+      serde_json::json!({"$jsii.byref": obj_ref})
+    }`;
   }
 }
 
