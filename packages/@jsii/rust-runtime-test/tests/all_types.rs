@@ -118,23 +118,6 @@ fn test_set_json_property() {
     assert_eq!(res, another_new_value);
 }
 
-// Do tests for map:
-
-//   // map
-
-//   private mapValue: { [key: string]: LibNumber } = {};
-
-//   public get mapProperty(): { [key: string]: LibNumber } {
-//     return this.mapValue;
-//   }
-
-//   public set mapProperty(value: { [key: string]: LibNumber }) {
-//     if (typeof value !== 'object') {
-//       throw new Error('not a map');
-//     }
-//     this.mapValue = value;
-//   }
-
 #[test]
 #[serial]
 fn test_get_map_property() {
@@ -206,3 +189,158 @@ fn test_set_array_property() {
     let res = all_types.get_array_property();
     assert_eq!(res, another_new_value);
 }
+
+// TODO: Write these tests for other types:
+// pub fn any_in(&self) {
+//     todo!();
+// }
+
+// pub fn any_out(&self) {
+//     todo!();
+// }
+
+// pub fn enum_method(&self) -> crate::StringEnum {
+//     todo!();
+// }
+
+// pub fn get_any_array_property(&self) -> Vec<serde_json::Value> {
+//     jsii_rust_runtime::JsiiRuntime::get(&self.jsii_object_ref, "anyArrayProperty")
+//         .expect("JsiiRuntime::get failed")
+// }
+
+// pub fn set_any_array_property(&self, value: Vec<serde_json::Value>) {
+//     let jsii_res = jsii_rust_runtime::JsiiRuntime::set(
+//         &self.jsii_object_ref,
+//         "anyArrayProperty",
+//         &serde_json::to_value(&value).expect("Failed to serialize array"),
+//     )
+//     .expect("JsiiRuntiem::invoke panic");
+// }
+
+// pub fn get_any_map_property(&self) -> std::collections::HashMap<String, serde_json::Value> {
+//     jsii_rust_runtime::JsiiRuntime::get(&self.jsii_object_ref, "anyMapProperty")
+//         .expect("JsiiRuntime::get failed")
+// }
+
+// pub fn set_any_map_property(&self, value: std::collections::HashMap<String, serde_json::Value>) {
+//     let jsii_res = jsii_rust_runtime::JsiiRuntime::set(&self.jsii_object_ref, "anyMapProperty", &serde_json::json!({"$jsii.map": serde_json::to_value(&value).expect("Failed to serialize map")})).expect("JsiiRuntiem::invoke panic");
+// }
+
+// pub fn get_any_property(&self) -> serde_json::Value {
+//     jsii_rust_runtime::JsiiRuntime::get(&self.jsii_object_ref, "anyProperty")
+//         .expect("JsiiRuntime::get failed")
+// }
+
+// pub fn set_any_property(&self, value: serde_json::Value) {
+//     let jsii_res = jsii_rust_runtime::JsiiRuntime::set(
+//         &self.jsii_object_ref,
+//         "anyProperty",
+//         &serde_json::to_value(&value).expect("Failed to serialize value"),
+//     )
+//     .expect("JsiiRuntiem::invoke panic");
+// }
+
+// pub fn get_enum_property(&self) -> String {
+//     jsii_rust_runtime::JsiiRuntime::get(&self.jsii_object_ref, "enumProperty")
+//         .expect("JsiiRuntime::get failed")
+// }
+
+// pub fn set_enum_property(&self, value: String) {
+//     let jsii_res = jsii_rust_runtime::JsiiRuntime::set(
+//         &self.jsii_object_ref,
+//         "enumProperty",
+//         &serde_json::json!({"$jsii.enum": serde_json::to_value(value).unwrap()}),
+//     )
+//     .expect("JsiiRuntiem::invoke panic");
+// }
+
+// pub fn get_union_array_property(&self) -> Vec<()> {
+//     jsii_rust_runtime::JsiiRuntime::get(&self.jsii_object_ref, "unionArrayProperty")
+//         .expect("JsiiRuntime::get failed")
+// }
+
+// pub fn set_union_array_property(&self, value: Vec<()>) {
+//     let jsii_res = jsii_rust_runtime::JsiiRuntime::set(
+//         &self.jsii_object_ref,
+//         "unionArrayProperty",
+//         &serde_json::to_value(&value).expect("Failed to serialize array"),
+//     )
+//     .expect("JsiiRuntiem::invoke panic");
+// }
+
+// pub fn get_union_map_property(&self) -> std::collections::HashMap<String, ()> {
+//     jsii_rust_runtime::JsiiRuntime::get(&self.jsii_object_ref, "unionMapProperty")
+//         .expect("JsiiRuntime::get failed")
+// }
+
+// pub fn set_union_map_property(&self, value: std::collections::HashMap<String, ()>) {
+//     let jsii_res = jsii_rust_runtime::JsiiRuntime::set(&self.jsii_object_ref, "unionMapProperty", &serde_json::json!({"$jsii.map": serde_json::to_value(&value).expect("Failed to serialize map")})).expect("JsiiRuntiem::invoke panic");
+// }
+
+// pub fn get_union_property(&self) -> serde_json::Value {
+//     jsii_rust_runtime::JsiiRuntime::get(&self.jsii_object_ref, "unionProperty")
+//         .expect("JsiiRuntime::get failed")
+// }
+
+// pub fn set_union_property(&self, value: serde_json::Value) {
+//     let jsii_res = jsii_rust_runtime::JsiiRuntime::set(
+//         &self.jsii_object_ref,
+//         "unionProperty",
+//         &serde_json::to_value(&value).expect("Failed to serialize union value"),
+//     )
+//     .expect("JsiiRuntiem::invoke panic");
+// }
+
+// pub fn get_unknown_array_property(&self) -> Vec<serde_json::Value> {
+//     jsii_rust_runtime::JsiiRuntime::get(&self.jsii_object_ref, "unknownArrayProperty")
+//         .expect("JsiiRuntime::get failed")
+// }
+
+// pub fn set_unknown_array_property(&self, value: Vec<serde_json::Value>) {
+//     let jsii_res = jsii_rust_runtime::JsiiRuntime::set(
+//         &self.jsii_object_ref,
+//         "unknownArrayProperty",
+//         &serde_json::to_value(&value).expect("Failed to serialize array"),
+//     )
+//     .expect("JsiiRuntiem::invoke panic");
+// }
+
+// pub fn get_unknown_map_property(&self) -> std::collections::HashMap<String, serde_json::Value> {
+//     jsii_rust_runtime::JsiiRuntime::get(&self.jsii_object_ref, "unknownMapProperty")
+//         .expect("JsiiRuntime::get failed")
+// }
+
+// pub fn set_unknown_map_property(
+//     &self,
+//     value: std::collections::HashMap<String, serde_json::Value>,
+// ) {
+//     let jsii_res = jsii_rust_runtime::JsiiRuntime::set(&self.jsii_object_ref, "unknownMapProperty", &serde_json::json!({"$jsii.map": serde_json::to_value(&value).expect("Failed to serialize map")})).expect("JsiiRuntiem::invoke panic");
+// }
+
+// pub fn get_unknown_property(&self) -> serde_json::Value {
+//     jsii_rust_runtime::JsiiRuntime::get(&self.jsii_object_ref, "unknownProperty")
+//         .expect("JsiiRuntime::get failed")
+// }
+
+// pub fn set_unknown_property(&self, value: serde_json::Value) {
+//     let jsii_res = jsii_rust_runtime::JsiiRuntime::set(
+//         &self.jsii_object_ref,
+//         "unknownProperty",
+//         &serde_json::to_value(&value).expect("Failed to serialize value"),
+//     )
+//     .expect("JsiiRuntiem::invoke panic");
+// }
+
+// pub fn get_optional_enum_value(&self) -> String {
+//     jsii_rust_runtime::JsiiRuntime::get(&self.jsii_object_ref, "optionalEnumValue")
+//         .expect("JsiiRuntime::get failed")
+// }
+
+// pub fn set_optional_enum_value(&self, value: String) {
+//     let jsii_res = jsii_rust_runtime::JsiiRuntime::set(
+//         &self.jsii_object_ref,
+//         "optionalEnumValue",
+//         &serde_json::json!({"$jsii.enum": serde_json::to_value(value).unwrap()}),
+//     )
+//     .expect("JsiiRuntiem::invoke panic");
+// }
