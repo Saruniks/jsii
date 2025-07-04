@@ -148,10 +148,9 @@ fn test_get_map_property() {
 #[serial]
 fn test_set_map_property() {
     let all_types = AllTypes::new();
-    // Get empty map
+
     let res = all_types.get_map_property();
     assert_eq!(res, HashMap::new());
-    // Set new map
     let mut new_value = HashMap::new();
 
     let number1 = scope_jsii_calc_lib::Number::new(10.0);
