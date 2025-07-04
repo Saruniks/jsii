@@ -25,10 +25,38 @@ export class RustStruct extends RustType<ClassType> {
     code.openBlock(`impl ${this.type.name}`);
 
     if (this.type.initializer) {
-      code.openBlock(`pub fn new() -> Self`);
-      code.line(`let jsii_res = jsii_rust_runtime::JsiiRuntime::create_object("${this.type.fqn}", Some(&[])).expect("JsiiRuntiem::create_object panic");`);
-      code.line(`Self { jsii_object_ref: jsii_res }`);
-      code.closeBlock();
+      // Get the initializer parameters
+      const initParams = this.type.initializer.parameters;
+      
+      if (initParams.length === 0) {
+        // No parameters, generate a simple constructor
+        code.openBlock(`pub fn new() -> Self`);
+        code.line(`let jsii_res = jsii_rust_runtime::JsiiRuntime::create_object("${this.type.fqn}", Some(&[])).expect("JsiiRuntiem::create_object panic");`);
+        code.line(`Self { jsii_object_ref: jsii_res }`);
+        code.closeBlock();
+      } else {
+        // Generate constructor with parameters
+        const paramsList = initParams.map(param => {
+          const paramType = makeRustType(param.type, this.type.assembly.name);
+          // Use 'param_' prefix for unnamed parameters or parameters named with underscore
+          const paramName = param.name === '_' || !param.name ? `param_${initParams.indexOf(param)}` : makeRustPropertyName(param.name);
+          return `${paramName}: ${paramType}`;
+        }).join(', ');
+        
+        code.openBlock(`pub fn new(${paramsList}) -> Self`);
+        
+        // Generate code to serialize each parameter
+        const argsArray = initParams.map(param => {
+          // Use 'param_' prefix for unnamed parameters or parameters named with underscore
+          const paramName = param.name === '_' || !param.name ? `param_${initParams.indexOf(param)}` : makeRustPropertyName(param.name);
+          return `serde_json::to_value(&${paramName}).expect("Failed to serialize ${paramName}")`;
+        }).join(', ');
+        
+        code.line(`let args = vec![${argsArray}];`);
+        code.line(`let jsii_res = jsii_rust_runtime::JsiiRuntime::create_object("${this.type.fqn}", Some(&args)).expect("JsiiRuntiem::create_object panic");`);
+        code.line(`Self { jsii_object_ref: jsii_res }`);
+        code.closeBlock();
+      }
       code.line();
     }
 

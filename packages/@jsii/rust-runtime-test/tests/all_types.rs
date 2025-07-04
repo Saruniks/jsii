@@ -153,22 +153,24 @@ fn test_set_map_property() {
     assert_eq!(res, HashMap::new());
     // Set new map
     let mut new_value = HashMap::new();
-    new_value.insert("key1".to_string(), 1.0);
-    new_value.insert("key2".to_string(), 2.0);
 
-    let number = scope_jsii_calc_lib::Number::new();
-    // all_types.set_map_property(new_value.clone());
-    // // Get again and check if is the same
+    let number1 = scope_jsii_calc_lib::Number::new(10.0);
+    let number2 = scope_jsii_calc_lib::Number::new(20.0);
+
+    new_value.insert("key1".to_string(), number1);
+    new_value.insert("key2".to_string(), number2);
+    all_types.set_map_property(new_value.clone());
+
+    // let res = all_types.get_map_property();
+    // assert_eq!(res, new_value);
+
     // let res = all_types.get_map_property();
     // assert_eq!(res, new_value);
     // // Set another map
     // let mut another_new_value = HashMap::new();
     // another_new_value.insert("another_key1".to_string(), 3.0);
     // another_new_value.insert("another_key2".to_string(), 4.0);
-    // all_types.set_map_property(another_new_value.clone());
     // // And again and check if is the same
-    // let res = all_types.get_map_property();
-    // assert_eq!(res, another_new_value);
 }
 
 #[test]
