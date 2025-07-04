@@ -65,11 +65,18 @@ export class RustStruct extends RustType<ClassType> {
       emitMethod(code, method, this.type.fqn, this.type.assembly.name, false);
     }
 
+    console.log(`DEBUG: Processing class ${this.type.name}, found ${this.type.ownProperties.length} properties:`);
+    this.type.ownProperties.forEach(prop => {
+      console.log(`  - ${prop.name} (optional: ${prop.optional})`);
+    });
+
     for (const property of this.type.ownProperties) {
         // if (property.name === 'booleanValue') {
           // code.line('fail compile');
         // }
-        code.openBlock(`pub fn get_${makeRustPropertyName(property.name)}(&self) -> ${makeRustTypeForProperty(property.type, this.type.assembly.name)}`);
+        console.log(`DEBUG: Processing property ${property.name}, optional: ${property.optional}, type:`, property.type);
+
+        code.openBlock(`pub fn get_${makeRustPropertyName(property.name)}(&self) -> ${makeRustTypeForProperty(property.type, this.type.assembly.name, property.optional)}`);
 
         // TODO: Handle different property types and static properties
         if (this.type.initializer) {
@@ -92,17 +99,37 @@ export class RustStruct extends RustType<ClassType> {
               // For enum types, we need to extract the enum value from the $jsii.enum object
               code.line(`{`);
               code.line(`  let json_response: serde_json::Value = jsii_rust_runtime::JsiiRuntime::get(&self.jsii_object_ref, "${substituteReservedWords(property.name)}").expect("JsiiRuntime::get failed");`);
-              code.line(`  // Extract enum value from {"$jsii.enum": "fqn/VALUE"} format`);
-              code.line(`  if let Some(enum_value) = json_response.get("$jsii.enum").and_then(|v| v.as_str()) {`);
-              code.line(`    enum_value.to_string()`);
-              code.line(`  } else {`);
-              code.line(`    // If it's not in enum format, try to return as-is (for default values)`);
-              code.line(`    json_response.as_str().unwrap_or("").to_string()`);
-              code.line(`  }`);
+              
+              if (property.optional) {
+                // For optional enum properties, handle null/undefined values
+                code.line(`  // Handle optional enum: check if the value is null/undefined`);
+                code.line(`  if json_response.is_null() {`);
+                code.line(`    None`);
+                code.line(`  } else if let Some(enum_value) = json_response.get("$jsii.enum").and_then(|v| v.as_str()) {`);
+                code.line(`    Some(enum_value.to_string())`);
+                code.line(`  } else {`);
+                code.line(`    // If it's not in enum format, try to return as-is (for default values)`);
+                code.line(`    json_response.as_str().map(|s| s.to_string())`);
+                code.line(`  }`);
+              } else {
+                // For required enum properties, the value must be present
+                code.line(`  // Extract enum value from {"$jsii.enum": "fqn/VALUE"} format`);
+                code.line(`  if let Some(enum_value) = json_response.get("$jsii.enum").and_then(|v| v.as_str()) {`);
+                code.line(`    enum_value.to_string()`);
+                code.line(`  } else {`);
+                code.line(`    // If it's not in enum format, try to return as-is (for default values)`);
+                code.line(`    json_response.as_str().unwrap_or("").to_string()`);
+                code.line(`  }`);
+              }
               code.line(`}`);
             } else if (isPrimitive) {
               // For primitive types, use the generic getter
-              code.line(`jsii_rust_runtime::JsiiRuntime::get(&self.jsii_object_ref, "${substituteReservedWords(property.name)}").expect("JsiiRuntime::get failed")`);
+              const result = `jsii_rust_runtime::JsiiRuntime::get(&self.jsii_object_ref, "${substituteReservedWords(property.name)}").expect("JsiiRuntime::get failed")`;
+              if (property.optional) {
+                code.line(`Some(${result})`);
+              } else {
+                code.line(result);
+              }
             } else {
               // Check if this is a map type
               const collection = (property.type as any).collection || (property.type as any).spec?.collection;
@@ -152,7 +179,12 @@ export class RustStruct extends RustType<ClassType> {
                   code.line(`}`);
                 } else {
                   // For maps with primitive values, use generic getter
-                  code.line(`jsii_rust_runtime::JsiiRuntime::get(&self.jsii_object_ref, "${substituteReservedWords(property.name)}").expect("JsiiRuntime::get failed")`);
+                  const result = `jsii_rust_runtime::JsiiRuntime::get(&self.jsii_object_ref, "${substituteReservedWords(property.name)}").expect("JsiiRuntime::get failed")`;
+                  if (property.optional) {
+                    code.line(`Some(${result})`);
+                  } else {
+                    code.line(result);
+                  }
                 }
               } else {
                 // Check if the Rust type is a simple type that should use generic getter
@@ -161,7 +193,12 @@ export class RustStruct extends RustType<ClassType> {
                 
                 if (isSimpleType) {
                   // For simple types (including enum strings), use the generic getter
-                  code.line(`jsii_rust_runtime::JsiiRuntime::get(&self.jsii_object_ref, "${substituteReservedWords(property.name)}").expect("JsiiRuntime::get failed")`);
+                  const result = `jsii_rust_runtime::JsiiRuntime::get(&self.jsii_object_ref, "${substituteReservedWords(property.name)}").expect("JsiiRuntime::get failed")`;
+                  if (property.optional) {
+                    code.line(`Some(${result})`);
+                  } else {
+                    code.line(result);
+                  }
                 } else {
                   // Determine if this is a complex type that needs special handling
                   const isComplexType = property.type.fqn || 
@@ -188,7 +225,12 @@ export class RustStruct extends RustType<ClassType> {
                       code.line(`  .and_then(|v| v.as_str())`);
                       code.line(`  .expect("Failed to extract object reference from response")`);
                       code.line(`  .to_string();`);
-                      code.line(`${typeName}::from_jsii_object_ref(object_ref)`);
+                      const result = `${typeName}::from_jsii_object_ref(object_ref)`;
+                      if (property.optional) {
+                        code.line(`Some(${result})`);
+                      } else {
+                        code.line(result);
+                      }
                     } else {
                       // For other complex types, use the existing logic
                       code.line(`let json_response = jsii_rust_runtime::JsiiRuntime::get_string(&self.jsii_object_ref, "${substituteReservedWords(property.name)}").expect("JsiiRuntime::get_string failed");`);
@@ -197,11 +239,21 @@ export class RustStruct extends RustType<ClassType> {
                       code.line(`  .and_then(|v| v.as_str())`);
                       code.line(`  .expect("Failed to extract object reference from response")`);
                       code.line(`  .to_string();`);
-                      code.line(`${typeName} { jsii_object_ref: object_ref, }`);
+                      const result = `${typeName} { jsii_object_ref: object_ref, }`;
+                      if (property.optional) {
+                        code.line(`Some(${result})`);
+                      } else {
+                        code.line(result);
+                      }
                     }
                   } else {
                     // For other cases (like unknown types), fall back to generic getter
-                    code.line(`jsii_rust_runtime::JsiiRuntime::get(&self.jsii_object_ref, "${substituteReservedWords(property.name)}").expect("JsiiRuntime::get failed")`);
+                    const result = `jsii_rust_runtime::JsiiRuntime::get(&self.jsii_object_ref, "${substituteReservedWords(property.name)}").expect("JsiiRuntime::get failed")`;
+                    if (property.optional) {
+                      code.line(`Some(${result})`);
+                    } else {
+                      code.line(result);
+                    }
                   }
                 }
               }
@@ -214,7 +266,7 @@ export class RustStruct extends RustType<ClassType> {
         code.closeBlock();
         code.line();
 
-        code.openBlock(`pub fn set_${makeRustPropertyName(property.name)}(&self, value: ${makeRustTypeForProperty(property.type, this.type.assembly.name)})`);
+        code.openBlock(`pub fn set_${makeRustPropertyName(property.name)}(&self, value: ${makeRustTypeForProperty(property.type, this.type.assembly.name, property.optional)})`);
 
         // Check if this is a trait (interface) type
         const traitTypePropertySetter = isTraitType(property.type);
@@ -224,10 +276,29 @@ export class RustStruct extends RustType<ClassType> {
         
         if (this.type.initializer && !traitTypePropertySetter) {
           if (isEnumSetter) {
-            // For enum setters, wrap the string value in the JSII enum format
-            code.line(`let jsii_res = jsii_rust_runtime::JsiiRuntime::set(&self.jsii_object_ref, "${substituteReservedWords(property.name)}", &serde_json::json!({"$jsii.enum": value})).expect("JsiiRuntiem::invoke panic");`);
+            if (property.optional) {
+              // For optional enum setters, handle Option<String>
+              code.line(`let jsii_value = match value {`);
+              code.line(`  Some(enum_val) => serde_json::json!({"$jsii.enum": enum_val}),`);
+              code.line(`  None => serde_json::Value::Null,`);
+              code.line(`};`);
+              code.line(`let jsii_res = jsii_rust_runtime::JsiiRuntime::set(&self.jsii_object_ref, "${substituteReservedWords(property.name)}", &jsii_value).expect("JsiiRuntiem::invoke panic");`);
+            } else {
+              // For required enum setters, wrap the string value in the JSII enum format
+              code.line(`let jsii_res = jsii_rust_runtime::JsiiRuntime::set(&self.jsii_object_ref, "${substituteReservedWords(property.name)}", &serde_json::json!({"$jsii.enum": value})).expect("JsiiRuntiem::invoke panic");`);
+            }
           } else {
-            code.line(`let jsii_res = jsii_rust_runtime::JsiiRuntime::set(&self.jsii_object_ref, "${substituteReservedWords(property.name)}", &${makeRustTypeConversion(property.type)}).expect("JsiiRuntiem::invoke panic");`);
+            if (property.optional) {
+              // For optional non-enum properties, handle Option<T>
+              code.line(`let jsii_value = match value {`);
+              code.line(`  Some(val) => ${makeRustTypeConversion(property.type).replace('&value', '&val')},`);
+              code.line(`  None => serde_json::Value::Null,`);
+              code.line(`};`);
+              code.line(`let jsii_res = jsii_rust_runtime::JsiiRuntime::set(&self.jsii_object_ref, "${substituteReservedWords(property.name)}", &jsii_value).expect("JsiiRuntiem::invoke panic");`);
+            } else {
+              // For required properties, use the direct conversion
+              code.line(`let jsii_res = jsii_rust_runtime::JsiiRuntime::set(&self.jsii_object_ref, "${substituteReservedWords(property.name)}", &${makeRustTypeConversion(property.type)}).expect("JsiiRuntiem::invoke panic");`);
+            }
           }
         } else {
           code.line(`todo!();`);
@@ -334,13 +405,18 @@ function makeRustTypeConversion(type: any): string {
   }
 }
 
-function makeRustTypeForProperty(type: any, currentAssemblyName?: string): string {
+function makeRustTypeForProperty(type: any, currentAssemblyName?: string, isOptional?: boolean): string {
   // For property returns, we need to wrap traits in Box<dyn>
-  const baseType = makeRustType(type, currentAssemblyName);
+  let baseType = makeRustType(type, currentAssemblyName);
   
   // Check if this is a trait (interface) type
   if (isTraitType(type)) {
-    return `Box<dyn ${baseType}>`;
+    baseType = `Box<dyn ${baseType}>`;
+  }
+  
+  // Wrap in Option<T> if the property is optional
+  if (isOptional) {
+    baseType = `Option<${baseType}>`;
   }
   
   return baseType;

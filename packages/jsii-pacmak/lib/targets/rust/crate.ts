@@ -227,7 +227,10 @@ export class Crate extends RustModule {
       code.line(`pub mod ${subCrate.moduleName};`);
     }
 
+    console.log(`DEBUG: Processing ${this.jsiiModule.types.length} types in ${this.jsiiModule.fqn}`);
     for (const type of this.jsiiModule.types) {
+      console.log(`DEBUG: Processing type ${type.name} with kind ${type.kind}, isClassType: ${type.isClassType()}`);
+      
       // if (type.isInterfaceType() && type.datatype) { // java-like rust struct?
       //   // return new RustStruct(this, type);
       //   code.line(`// TODO: Handle interface type ${type.name} with datatype`);
@@ -239,6 +242,7 @@ export class Crate extends RustModule {
         continue;
         // return new GoInterface(this, type);
       } else if (type.isClassType()) { // java-like struct
+        console.log(`DEBUG: Generating RustStruct for class type ${type.name}`);
         const struct = new RustStruct(type);
         struct.emit(code);
         continue;
