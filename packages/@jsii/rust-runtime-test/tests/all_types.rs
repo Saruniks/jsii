@@ -191,26 +191,24 @@ fn test_set_array_property() {
 }
 
 // Tests for any_in and any_out methods
-// NOTE: These methods are currently using todo!() in generated code
-// Tests disabled until the generator is fixed to properly implement these methods
-// #[test]
-// #[serial]
-// fn test_any_out_and_any_in() {
-//     let all_types = AllTypes::new();
-//     let result = all_types.any_out();
-//     all_types.any_in(result);
-// }
+// NOTE: These methods currently have incorrect signatures in generated code
+// any_out should return a value and any_in should take a parameter
+#[test]
+#[serial]
+fn test_any_out_and_any_in() {
+    let all_types = AllTypes::new();
+    let result = all_types.any_out();
+    all_types.any_in(result);
+}
 
 // Tests for enum_method
-// NOTE: This method is currently using todo!() in generated code
-// Test disabled until the generator is fixed to properly implement this method
-// #[test]
-// #[serial]
-// fn test_enum_method() {
-//     let all_types = AllTypes::new();
-//     let result = all_types.enum_method(jsii_calc::StringEnum::A);
-//     assert_eq!(result, jsii_calc::StringEnum::A);
-// }
+#[test]
+#[serial]
+fn test_enum_method() {
+    let all_types = AllTypes::new();
+    let result = all_types.enum_method(jsii_calc::StringEnum::A);
+    assert_eq!(result, jsii_calc::StringEnum::A);
+}
 
 // Tests for any_property
 #[test]
@@ -407,8 +405,8 @@ fn test_set_union_array_property() {
 
     // Test with union array containing different types (number and complex objects would be valid)
     let union_array = vec![
-        serde_json::json!(42),      // number type
-        serde_json::json!(123.5),   // another number
+        serde_json::json!(42),    // number type
+        serde_json::json!(123.5), // another number
     ];
     all_types.set_union_array_property(union_array.clone());
     let result = all_types.get_union_array_property();

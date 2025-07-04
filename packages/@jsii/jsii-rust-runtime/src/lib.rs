@@ -307,7 +307,8 @@ impl JsiiRuntime {
                             Value::Null => Ok("null".to_string()),
                         }
                     } else {
-                        Err("No result field found in ok response".to_string())
+                        // Handle void methods that don't return a result
+                        Ok("".to_string())
                     }
                 } else {
                     Err("No ok field found in response".to_string())
