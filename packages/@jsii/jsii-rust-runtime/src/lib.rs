@@ -351,6 +351,21 @@ impl JsiiRuntime {
                     let error = error_msg.to_string();
                     Err(format!("Error getting property: {}", error))
                 } else if let Some(ok) = json.get("ok") {
+                    // Special case for Option<T> types: if the value is an empty object,
+                    // and T is an Option type (we can infer this from the type name),
+                    // return None wrapped in the Option.
+                    let type_name = std::any::type_name::<T>();
+                    if ok.is_object()
+                        && ok.as_object().unwrap().is_empty()
+                        && type_name.contains("Option")
+                    {
+                        // Return None wrapped in the Option
+                        let null_value = serde_json::Value::Null;
+                        return serde_json::from_value(null_value).map_err(|e| {
+                            format!("Failed to deserialize null to target Option type: {}", e)
+                        });
+                    }
+
                     // Extract result from ok.value
                     if let Some(result) = ok.get("value") {
                         // Check if date:
@@ -402,7 +417,17 @@ impl JsiiRuntime {
                             format!("Failed to deserialize result to target type: {}", e)
                         })
                     } else {
-                        Err("No value field found in ok response".to_string())
+                        // If we're expecting an Option<T>, return None when there's no value field
+                        let type_name = std::any::type_name::<T>();
+                        if type_name.contains("Option") {
+                            // Return None for Option types
+                            let null_value = serde_json::Value::Null;
+                            serde_json::from_value(null_value).map_err(|e| {
+                                format!("Failed to deserialize null to target Option type: {}", e)
+                            })
+                        } else {
+                            Err("No value field found in ok response".to_string())
+                        }
                     }
                 } else {
                     Err("No ok field found in response".to_string())
