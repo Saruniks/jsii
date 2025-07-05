@@ -523,7 +523,7 @@ function mapAssemblyToCrateName(assemblyName: string, currentAssemblyName?: stri
 
 export function makeRustType(type: any, currentAssemblyName?: string): string {
   const isOptional = type.optional || type.spec?.optional || false;
-  
+
   // Debug logging to help troubleshoot type detection
   console.log("Type to convert:", 
     type.primitive || 
