@@ -1,5 +1,5 @@
 use jsii_calc::ObjectRefsInCollections;
-use scope_jsii_calc_lib::NumericValue;
+use scope_jsii_calc_lib::Number;
 use serial_test::serial;
 
 #[test]
@@ -7,7 +7,7 @@ use serial_test::serial;
 fn test_empty_array() {
     // Test with an empty array
     let test_class = ObjectRefsInCollections::new();
-    let values: Vec<NumericValue> = vec![];
+    let values: Vec<Number> = Vec::new();
 
     let result = test_class.sum_from_array(values);
 
@@ -20,7 +20,7 @@ fn test_empty_array() {
 fn test_empty_map() {
     // Test with an empty map
     let test_class = ObjectRefsInCollections::new();
-    let values: std::collections::HashMap<String, NumericValue> = std::collections::HashMap::new();
+    let values: std::collections::HashMap<String, Number> = std::collections::HashMap::new();
 
     let result = test_class.sum_from_map(values);
 
@@ -35,7 +35,7 @@ fn test_single_item_array() {
     let test_class = ObjectRefsInCollections::new();
 
     // Using the constructor directly without setter since value property is immutable
-    let num = NumericValue::new();
+    let num = Number::new(10.0);
 
     let values = vec![num];
 
@@ -52,7 +52,7 @@ fn test_single_item_map() {
     let test_class = ObjectRefsInCollections::new();
 
     // Using the constructor directly without setter since value property is immutable
-    let num = NumericValue::new();
+    let num = Number::new(10.0);
 
     let mut values = std::collections::HashMap::new();
     values.insert("only_key".to_string(), num);
@@ -70,8 +70,8 @@ fn test_large_numbers_array() {
     let test_class = ObjectRefsInCollections::new();
 
     // Using the constructor directly without setter since value property is immutable
-    let num1 = NumericValue::new();
-    let num2 = NumericValue::new();
+    let num1 = Number::new(10.0);
+    let num2 = Number::new(10.0);
 
     let values = vec![num1, num2];
 
@@ -88,8 +88,8 @@ fn test_large_numbers_map() {
     let test_class = ObjectRefsInCollections::new();
 
     // Using the constructor directly without setter since value property is immutable
-    let num1 = NumericValue::new();
-    let num2 = NumericValue::new();
+    let num1 = Number::new(10.0);
+    let num2 = Number::new(10.0);
 
     let mut values = std::collections::HashMap::new();
     values.insert("first".to_string(), num1);
@@ -108,9 +108,9 @@ fn test_negative_values_array() {
     let test_class = ObjectRefsInCollections::new();
 
     // Using the constructor directly without setter since value property is immutable
-    let num1 = NumericValue::new();
-    let num2 = NumericValue::new();
-    let num3 = NumericValue::new();
+    let num1 = Number::new(10.0);
+    let num2 = Number::new(10.0);
+    let num3 = Number::new(10.0);
 
     let values = vec![num1, num2, num3];
 
@@ -127,9 +127,9 @@ fn test_negative_values_map() {
     let test_class = ObjectRefsInCollections::new();
 
     // Using the constructor directly without setter since value property is immutable
-    let num1 = NumericValue::new();
-    let num2 = NumericValue::new();
-    let num3 = NumericValue::new();
+    let num1 = Number::new(10.0);
+    let num2 = Number::new(10.0);
+    let num3 = Number::new(10.0);
 
     let mut values = std::collections::HashMap::new();
     values.insert("first".to_string(), num1);

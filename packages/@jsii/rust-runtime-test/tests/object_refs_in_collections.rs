@@ -1,5 +1,5 @@
 use jsii_calc::ObjectRefsInCollections;
-use scope_jsii_calc_lib::NumericValue;
+use scope_jsii_calc_lib::Number;
 use serial_test::serial;
 
 #[test]
@@ -8,14 +8,14 @@ fn test_sum_from_array() {
     // Create the class that works with object references in collections
     let test_class = ObjectRefsInCollections::new();
 
-    // Create several NumericValue instances
+    // Create several Number insta10.0nces
     // Note: Value property appears to be immutable, so we can't set it directly
     // We'll just use the default values from the constructor
-    let num1 = NumericValue::new();
-    let num2 = NumericValue::new();
-    let num3 = NumericValue::new();
+    let num1 = Number::new(10.0);
+    let num2 = Number::new(20.0);
+    let num3 = Number::new(30.0);
 
-    // Create an array of NumericValue objects
+    // Create an array of Number objec10.0ts
     let values = vec![num1, num2, num3];
 
     // Call the method that sums values from an array
@@ -32,14 +32,14 @@ fn test_sum_from_map() {
     // Create the class that works with object references in collections
     let test_class = ObjectRefsInCollections::new();
 
-    // Create several NumericValue instances
+    // Create several Number insta10.0nces
     // Note: Value property appears to be immutable, so we can't set it directly
     // We'll just use the default values from the constructor
-    let num1 = NumericValue::new();
-    let num2 = NumericValue::new();
-    let num3 = NumericValue::new();
+    let num1 = Number::new(10.0);
+    let num2 = Number::new(10.0);
+    let num3 = Number::new(10.0);
 
-    // Create a map of NumericValue objects
+    // Create a map of Number objec10.0ts
     let mut values = std::collections::HashMap::new();
     values.insert("first".to_string(), num1);
     values.insert("second".to_string(), num2);

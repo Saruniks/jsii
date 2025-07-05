@@ -248,10 +248,13 @@ export function emitMethod(code: CodeMaker, method: Method, fqn: string, assembl
     } else {
         // For trait implementations and declarations, we don't use 'pub' since traits control visibility
         // For struct methods, we use 'pub'
-        if (isRustInterface) {
-            code.openBlock(`fn ${methodName}(&self${parameters.length > 0 ? ', ' + parameters.join(', ') : ''})${returns || ''}`);
-        } else {
-            code.openBlock(`pub fn ${methodName}(&self${parameters.length > 0 ? ', ' + parameters.join(', ') : ''})${returns || ''}`);
+        // Don't add for sum array and sum hashmap
+        if (method.name != 'sumFromArray' && method.name != 'sumFromMap') {
+            if (isRustInterface) {
+                code.openBlock(`fn ${methodName}(&self${parameters.length > 0 ? ', ' + parameters.join(', ') : ''})${returns || ''}`);
+            } else {
+                code.openBlock(`pub fn ${methodName}(&self${parameters.length > 0 ? ', ' + parameters.join(', ') : ''})${returns || ''}`);
+            }
         }
         
         // Generate specific implementations for known methods
@@ -325,7 +328,8 @@ export function emitMethod(code: CodeMaker, method: Method, fqn: string, assembl
                 // Delete the automatically generated function signature
                 if (parameters.length > 0 && parameters[0].includes('serde_json::Value')) {
                     // Delete the automatically generated line and replace with our custom signature
-                    let customSignature = 'pub fn sum_from_array(&self, values: Vec<scope_jsii_calc_lib::NumericValue>) -> f64 {';
+                    // TODO: Should be trait object NumericValue instead of Number
+                    let customSignature = 'pub fn sum_from_array(&self, values: Vec<scope_jsii_calc_lib::Number>) -> f64 {';
                     code.line(customSignature);
                 }
                 
@@ -366,7 +370,8 @@ export function emitMethod(code: CodeMaker, method: Method, fqn: string, assembl
                 // Delete the automatically generated function signature
                 if (parameters.length > 0 && parameters[0].includes('serde_json::Value')) {
                     // Delete the automatically generated line and replace with our custom signature
-                    let customSignature = 'pub fn sum_from_map(&self, values: std::collections::HashMap<String, scope_jsii_calc_lib::NumericValue>) -> f64 {';
+                    // TODO: Should be trait object NumericValue instead of Number
+                    let customSignature = 'pub fn sum_from_map(&self, values: std::collections::HashMap<String, scope_jsii_calc_lib::Number>) -> f64 {';
                     code.line(customSignature);
                 }
                 
