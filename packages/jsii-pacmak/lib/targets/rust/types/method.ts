@@ -19,7 +19,7 @@ export function emitMethod(code: CodeMaker, method: Method, fqn: string, assembl
             if (param.type.primitive === 'any') {
                 parameters.push(`${makeRustPropertyName(param.name)}: serde_json::Value`);
             } else if (param.type.primitive) {
-                parameters.push(`${makeRustPropertyName(param.name)}: ${makeRustType(param.type, assemblyName)}`);
+                parameters.push(`${makeRustPropertyName(param.name)}: ${makeRustType(param.type, assemblyName, param.optional === true)}`);
             } else if (param.type.type?.isEnumType()) {
                 // Get the assembly/package name of the current type and the param type
                 const currentAssembly = assemblyName;

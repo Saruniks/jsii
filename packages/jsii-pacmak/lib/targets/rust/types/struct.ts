@@ -521,8 +521,7 @@ function mapAssemblyToCrateName(assemblyName: string, currentAssemblyName?: stri
     .replace(/-/g, '_'); // Replace - with _
 }
 
-export function makeRustType(type: any, currentAssemblyName?: string): string {
-  const isOptional = type.optional || type.spec?.optional || false;
+export function makeRustType(type: any, currentAssemblyName?: string, isOptional?: boolean): string {
 
   // Debug logging to help troubleshoot type detection
   console.log("Type to convert:", 
