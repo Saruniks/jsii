@@ -425,6 +425,11 @@ export function emitMethod(code: CodeMaker, method: Method, fqn: string, assembl
             // get all parameter names list so we can pass them to the invoke method
             // In your method.ts generator - modify the parameter handling for dates:
             const params = method.parameters?.map(p => {
+                // Skip optional parameters
+                if (p.optional === true) {
+                    return null;
+                }
+                
                 if (p.type.primitive === 'date') {
                     return `serde_json::json!({
                         "$jsii.date": ${makeRustPropertyName(p.name)}.map(|dt| dt.to_rfc3339())
@@ -438,8 +443,13 @@ export function emitMethod(code: CodeMaker, method: Method, fqn: string, assembl
             
             code.line(`let jsii_res = jsii_rust_runtime::JsiiRuntime::invoke(&self.jsii_object_ref, "${method.name}", Some(&[${params}])).expect("JsiiRuntime::invoke panic");`);
             code.line(`println!("Result: {:?}", jsii_res);`);
-            code.line(`serde_json::from_str(&jsii_res).expect("Failed to deserialize result")`);
-            code.line(`// TODO: Handle specific return types if needed`);
+            // code.line(`serde_json::from_str(&jsii_res).expect("Failed to deserialize result")`); // Here's a String already, maybe use generic?
+            // code.line(`// TODO: Handle specific return types if needed`);
+            if (method.returns.toString() !== 'void' && method.returns.type.primitive !== 'void') {
+                // Only add todo!() if the method returns something
+                code.line(`todo!("Return type handling for ${method.name} is not implemented yet");`);
+            }
+            // If method doesn't return anything (void), don't add any code
         } else {
             code.line(`todo!()`);
         }
