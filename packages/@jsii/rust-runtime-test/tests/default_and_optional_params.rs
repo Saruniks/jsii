@@ -107,8 +107,8 @@ fn test_optional_any_with_different_types() {
 //     );
 // }
 
-/// Tests for methods with optional parameters and defaulted arguments
-/// This verifies the current implementation without modifying the generator
+// Tests for methods with optional parameters and defaulted arguments
+// This verifies the current implementation without modifying the generator
 
 // #[test]
 // #[serial]
