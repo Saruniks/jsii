@@ -359,7 +359,7 @@ export function emitMethod(code: CodeMaker, method: Method, fqn: string, assembl
                     // Extract the result value or default to 0.0
                     parsed.get("ok")
                         .and_then(|ok| ok.get("result"))
-                        .and_then(|r| r.as_f64())
+                        .and_then(|r| Some(r.as_i64().unwrap() as f64))
                         .unwrap_or(0.0)
                 `);
             }
@@ -406,7 +406,7 @@ export function emitMethod(code: CodeMaker, method: Method, fqn: string, assembl
                     // Extract the result value or default to 0.0
                     parsed.get("ok")
                         .and_then(|ok| ok.get("result"))
-                        .and_then(|r| r.as_f64())
+                        .and_then(|r| Some(r.as_i64().unwrap() as f64))
                         .unwrap_or(0.0)
                 `);
             } else {

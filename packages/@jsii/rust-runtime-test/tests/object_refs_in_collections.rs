@@ -23,7 +23,7 @@ fn test_sum_from_array() {
 
     // Just verify that the method returns a valid number
     // Since we can't set values, we can't assert the exact sum
-    assert!(result >= 0.0, "Expected sum to be a valid number");
+    assert_eq!(result, 60.0);
 }
 
 #[test]
@@ -36,8 +36,8 @@ fn test_sum_from_map() {
     // Note: Value property appears to be immutable, so we can't set it directly
     // We'll just use the default values from the constructor
     let num1 = Number::new(10.0);
-    let num2 = Number::new(10.0);
-    let num3 = Number::new(10.0);
+    let num2 = Number::new(40.0);
+    let num3 = Number::new(50.0);
 
     // Create a map of Number objec10.0ts
     let mut values = std::collections::HashMap::new();
@@ -50,5 +50,5 @@ fn test_sum_from_map() {
 
     // Just verify that the method returns a valid number
     // Since we can't set values, we can't assert the exact sum
-    assert!(result >= 0.0, "Expected sum to be a valid number");
+    assert_eq!(result, 100.0);
 }
