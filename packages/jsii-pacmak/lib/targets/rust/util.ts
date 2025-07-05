@@ -79,6 +79,11 @@ export function substituteReservedWords(name: string): string {
 
 // TODO: Should we continue doing this, use original names, or maybe use access modifiers
 export function makeRustPropertyName(propertyName: string): string {
+  // If it's _ then replace with var
+  if (propertyName === '_') {
+    return 'var';
+  }
+
   // If the property is all uppercase, preserve it (for constants)
   if (propertyName === propertyName.toUpperCase()) {
     return substituteReservedWords(propertyName);
