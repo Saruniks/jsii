@@ -1,3 +1,4 @@
+use chrono::DateTime;
 use jsii_calc::RuntimeTypeChecking;
 use serial_test::serial;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -10,31 +11,23 @@ fn test_method_with_optional_arguments_required_only() {
 
     // Call method with only required arguments
     // This should work without error - pass null for optional arg
-    test_class.method_with_optional_arguments(50.0, "Hello".to_string(), None);
+    test_class.method_with_optional_arguments(50.0, "Hello".to_string(), None); // No Panic, no error later
 }
 
-// #[test]
-// #[serial]
-// fn test_method_with_optional_arguments_with_optional() {
-//     // Create the RuntimeTypeChecking instance
-//     let test_class = RuntimeTypeChecking::new();
+#[test]
+#[serial]
+fn test_method_with_optional_arguments_with_optional() {
+    // Create the RuntimeTypeChecking instance
+    let test_class = RuntimeTypeChecking::new();
 
-//     // Create a date
-//     let now = SystemTime::now()
-//         .duration_since(UNIX_EPOCH)
-//         .unwrap()
-//         .as_secs();
-//     let date = chrono::DateTime::from_timestamp(now as i64, 0)
-//         .unwrap()
-//         .to_rfc3339();
-
-//     // Call method with optional argument provided
-//     test_class.method_with_optional_arguments(
-//         serde_json::to_value(42).unwrap(),
-//         serde_json::to_value("required string").unwrap(),
-//         serde_json::to_value(date).unwrap(),
-//     );
-// }
+    // Call method with only required arguments
+    // This should work without error - pass null for optional arg
+    test_class.method_with_optional_arguments(
+        50.0,
+        "Hello".to_string(),
+        Some(DateTime::from(SystemTime::now())), // No Panic, no error later
+    );
+}
 
 // #[test]
 // #[serial]
@@ -44,11 +37,15 @@ fn test_method_with_optional_arguments_required_only() {
 
 //     // Call with no arguments (should use defaults)
 //     // Pass null to use default values
-//     test_class.method_with_defaulted_arguments(
-//         serde_json::Value::Null,
-//         serde_json::Value::Null,
-//         serde_json::Value::Null,
-//     );
+//     // TODO: Support one day:
+//     // if None then init to some value inside the binding method
+//     // If some then use the provided value
+//     // test_class.method_with_defaulted_arguments(
+//     //     serde_json::Value::Null,
+//     //     serde_json::Value::Null,
+//     //     serde_json::Value::Null,
+//     // );
+// TODO: After supporting that then implement for constructors as well
 // }
 
 // #[test]
