@@ -17,6 +17,7 @@ export class RustStruct extends RustType<ClassType> {
       code.line('#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]');
       code.openBlock(`pub struct ${this.type.name}`);
       // TODO: Should jsii_object be something else than String?
+      code.line('#[serde(rename = "$jsii.byref")]');
       code.line('pub jsii_object_ref: String,');
       code.closeBlock();
     }
@@ -345,9 +346,10 @@ function makeRustTypeConversion(type: any): string {
           let val_json = serde_json::to_string(val).expect("Failed to serialize map value");
           // Parse it back to access the jsii_object_ref field
           let val_parsed: serde_json::Value = serde_json::from_str(&val_json).expect("Failed to parse value JSON");
-          // Extract the jsii_object_ref field value
-          let obj_ref = val_parsed.get("jsii_object_ref")
+          // First try to look for "$jsii.byref", then fall back to "jsii_object_ref"
+          let obj_ref = val_parsed.get("$jsii.byref")
             .and_then(|v| v.as_str())
+            .or_else(|| val_parsed.get("jsii_object_ref").and_then(|v| v.as_str()))
             .expect("Failed to get jsii_object_ref from map value")
             .to_string();
           // Create the proper JSII reference
