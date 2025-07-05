@@ -357,10 +357,14 @@ export function emitMethod(code: CodeMaker, method: Method, fqn: string, assembl
                         .expect("Failed to parse JSON response");
                     
                     // Extract the result value or default to 0.0
-                    parsed.get("ok")
-                        .and_then(|ok| ok.get("result"))
-                        .and_then(|r| Some(r.as_i64().unwrap() as f64))
-                        .unwrap_or(0.0)
+                    println!("DEBUG: Parsed: {}", parsed);
+                    // parsed.get("ok")
+                    //     .and_then(|ok| { 
+                    //         println!("DEBUG: ok: {}", ok);
+                    //         ok.get("result") })
+                    //     .and_then(|r| Some(r.as_str().expect("expect 0").parse::<f64>().expect("expect 1")))
+                    //     .expect("expect 2")
+                    parsed.as_f64().expect("Expected result to be a number")
                 `);
             }
 
@@ -404,10 +408,14 @@ export function emitMethod(code: CodeMaker, method: Method, fqn: string, assembl
                         .expect("Failed to parse JSON response");
                     
                     // Extract the result value or default to 0.0
-                    parsed.get("ok")
-                        .and_then(|ok| ok.get("result"))
-                        .and_then(|r| Some(r.as_i64().unwrap() as f64))
-                        .unwrap_or(0.0)
+                    println!("DEBUG: Parsed: {}", parsed);
+                    // parsed.get("ok")
+                    //     .and_then(|ok| { 
+                    //         println!("DEBUG: ok: {}", ok);
+                    //         ok.get("result") })
+                    //     .and_then(|r| Some(r.as_str().expect("expect 0").parse::<f64>().expect("expect 1")))
+                    //     .expect("expect 2")
+                    parsed.as_f64().expect("Expected result to be a number")
                 `);
             } else {
             code.line(`todo!();`);
