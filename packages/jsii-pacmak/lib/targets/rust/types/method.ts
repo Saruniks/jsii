@@ -16,9 +16,9 @@ export function emitMethod(code: CodeMaker, method: Method, fqn: string, assembl
     // Handle parameters
     if (method.parameters) {
         for (const param of method.parameters) {
-            if (param.type.primitive === 'any') {
-                parameters.push(`${makeRustPropertyName(param.name)}: serde_json::Value`);
-            } else if (param.type.primitive) {
+            // if (param.type.primitive === 'any') {
+                // parameters.push(`${makeRustPropertyName(param.name)}: serde_json::Value`);
+            if (param.type.primitive) {
                 parameters.push(`${makeRustPropertyName(param.name)}: ${makeRustType(param.type, assemblyName, param.optional === true)}`);
             } else if (param.type.type?.isEnumType()) {
                 // Get the assembly/package name of the current type and the param type
@@ -423,29 +423,48 @@ export function emitMethod(code: CodeMaker, method: Method, fqn: string, assembl
         } else if (!method.abstract && method.parentType && method.parentType.isClassType() && method.parentType.fqn != 'jsii-calc.union.Resolvable' && method.parentType.fqn != 'jsii-calc.SingletonString' && method.parentType.fqn != 'jsii-calc.SingletonInt') {
             // Default case: Invoke the jsii runtime to call the instance method
             // get all parameter names list so we can pass them to the invoke method
-            // In your method.ts generator - modify the parameter handling for dates:
-            const params = method.parameters?.map(p => {
-                // Skip optional parameters
-                if (p.optional === true) {
-                    return null;
-                }
-                
-                if (p.type.primitive === 'date') {
-                    return `serde_json::json!({
-                        "$jsii.date": ${makeRustPropertyName(p.name)}.map(|dt| dt.to_rfc3339())
-                    })`;
-                } else if (p.type.primitive) {
-                    return `${makeRustPropertyName(p.name)}.into()`;
-                }
-                // Don't include parameters that are not primitive or date
-                return null;
-            }).filter(Boolean).join(', ') || [];
             
-            code.line(`let jsii_res = jsii_rust_runtime::JsiiRuntime::invoke(&self.jsii_object_ref, "${method.name}", Some(&[${params}])).expect("JsiiRuntime::invoke panic");`);
+            // TODO: It should handle optional params in the middle of the list and not just at the end
+            // Create a mutable vector to hold parameter values
+            code.line(`let mut param_values = Vec::new();`);
+            
+            // Add code to build the parameter list
+            if (method.parameters) {
+                for (const param of method.parameters) {
+                    const paramName = makeRustPropertyName(param.name);
+                    
+                    if (param.optional === true) {
+                        // For optional parameters, check if they're present
+                        code.line(`if let Some(value) = &${paramName} {`);
+                        if (param.type.primitive === 'date') {
+                            code.line(`    param_values.push(serde_json::json!({ "$jsii.date": value.to_rfc3339() }));`);
+                        } else if (param.type.primitive) {
+                            code.line(`    param_values.push(serde_json::to_value(value).expect("Failed to serialize parameter"));`);
+                        } else {
+                            code.line(`    // Add custom serialization for non-primitive types if needed`);
+                            code.line(`    param_values.push(serde_json::to_value(value).expect("Failed to serialize parameter"));`);
+                        }
+                        code.line(`}`);
+                    } else {
+                        // For required parameters
+                        if (param.type.primitive === 'date') {
+                            code.line(`param_values.push(serde_json::json!({ "$jsii.date": ${paramName}.to_rfc3339() }));`);
+                        } else if (param.type.primitive) {
+                            code.line(`param_values.push(serde_json::to_value(&${paramName}).expect("Failed to serialize parameter"));`);
+                        } else {
+                            code.line(`// Add custom serialization for non-primitive types if needed`);
+                            code.line(`param_values.push(serde_json::to_value(&${paramName}).expect("Failed to serialize parameter"));`);
+                        }
+                    }
+                }
+            }
+            
+            code.line(`let jsii_res = jsii_rust_runtime::JsiiRuntime::invoke(&self.jsii_object_ref, "${method.name}", Some(&param_values)).expect("JsiiRuntime::invoke panic");`);
             code.line(`println!("Result: {:?}", jsii_res);`);
             // code.line(`serde_json::from_str(&jsii_res).expect("Failed to deserialize result")`); // Here's a String already, maybe use generic?
             // code.line(`// TODO: Handle specific return types if needed`);
             if (method.returns.toString() !== 'void' && method.returns.type.primitive !== 'void') {
+            // if (method.returns.toString() !== 'void' && method.returns.type.primitive !== 'void' && !method.returns.type.primitive) {
                 // Only add todo!() if the method returns something
                 code.line(`todo!("Return type handling for ${method.name} is not implemented yet");`);
             }

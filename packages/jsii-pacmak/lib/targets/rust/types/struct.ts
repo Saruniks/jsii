@@ -38,7 +38,7 @@ export class RustStruct extends RustType<ClassType> {
       } else {
         // Generate constructor with parameters
         const paramsList = initParams.map(param => {
-          const paramType = makeRustType(param.type, this.type.assembly.name);
+          const paramType = makeRustType(param.type, this.type.assembly.name, param.optional);
           // Use 'param_' prefix for unnamed parameters or parameters named with underscore
           const paramName = param.name === '_' || !param.name ? `param_${initParams.indexOf(param)}` : makeRustPropertyName(param.name);
           return `${paramName}: ${paramType}`;
@@ -145,7 +145,7 @@ export class RustStruct extends RustType<ClassType> {
                 
                 if (isComplexElement) {
                   // For maps with complex objects, we need to process each entry
-                  const elementType = makeRustType(collection.elementtype, this.type.assembly.name);
+                  const elementType = makeRustType(collection.elementtype, this.type.assembly.name, collection.optional);
                   
                   // Check if the element type is an interface (trait) - if so, use the concrete implementation
                   const isElementInterface = (collection.elementtype.type && 
@@ -193,7 +193,7 @@ export class RustStruct extends RustType<ClassType> {
                 }
               } else {
                 // Check if the Rust type is a simple type that should use generic getter
-                const rustType = makeRustType(property.type, this.type.assembly.name);
+                const rustType = makeRustType(property.type, this.type.assembly.name, property.optional);
                 const isSimpleType = rustType === 'String' || rustType === 'f64' || rustType === 'bool' || rustType === 'serde_json::Value';
                 
                 if (isSimpleType) {
@@ -212,7 +212,7 @@ export class RustStruct extends RustType<ClassType> {
                 
                   if (isComplexType) {
                     // For complex types, extract the object reference and construct a new instance
-                    const typeName = makeRustType(property.type, this.type.assembly.name);
+                    const typeName = makeRustType(property.type, this.type.assembly.name, property.optional);
                     
                     // Check if this is an interface type that needs concrete wrapper
                     const isInterface = (property.type.type && property.type.type.isInterfaceType && property.type.type.isInterfaceType()) ||
@@ -425,17 +425,17 @@ function makeRustTypeConversion(type: any): string {
 
 function makeRustTypeForProperty(type: any, currentAssemblyName?: string, isOptional?: boolean): string {
   // For property returns, we need to wrap traits in Box<dyn>
-  let baseType = makeRustType(type, currentAssemblyName);
+  let baseType = makeRustType(type, currentAssemblyName, isOptional);
   
   // Check if this is a trait (interface) type
   if (isTraitType(type)) {
     baseType = `Box<dyn ${baseType}>`;
   }
   
-  // Wrap in Option<T> if the property is optional
-  if (isOptional) {
-    baseType = `Option<${baseType}>`;
-  }
+  // // Wrap in Option<T> if the property is optional
+  // if (isOptional) {
+  //   baseType = `Option<${baseType}>`;
+  // }
   
   return baseType;
 }
@@ -532,7 +532,7 @@ export function makeRustType(type: any, currentAssemblyName?: string, isOptional
   
   // Function to wrap a type in Option<> if needed
   const wrapOptional = (rustType: string): string => {
-    return isOptional ? `Option<${rustType}>` : rustType;
+    return isOptional ? `Option::<${rustType}>` : rustType;
   };
   
   // Check for primitive types first
@@ -584,7 +584,7 @@ export function makeRustType(type: any, currentAssemblyName?: string, isOptional
       }
       
       // For non-interface types, use the regular type
-      const valueType = makeRustType(collection.elementtype, currentAssemblyName);
+      const valueType = makeRustType(collection.elementtype, currentAssemblyName, collection.optional);
       return wrapOptional(`std::collections::HashMap<String, ${valueType}>`);
     }
     
@@ -627,7 +627,7 @@ export function makeRustType(type: any, currentAssemblyName?: string, isOptional
       }
       
       // For non-interface types, use the regular type
-      const elementType = makeRustType(collection.elementtype, currentAssemblyName);
+      const elementType = makeRustType(collection.elementtype, currentAssemblyName, collection.optional);
       return wrapOptional(`Vec<${elementType}>`);
     }
     
@@ -754,5 +754,5 @@ function makeConcreteWrapperType(type: any, currentAssemblyName?: string): strin
     return fullPath;
   }
   
-  return makeRustType(type, currentAssemblyName);
+  return makeRustType(type, currentAssemblyName, type.optional); // Fallback to regular type conversion
 }
