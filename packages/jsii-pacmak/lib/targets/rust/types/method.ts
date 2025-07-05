@@ -50,6 +50,11 @@ export function emitMethod(code: CodeMaker, method: Method, fqn: string, assembl
                         .replace(/\./g, '::');
                 }
                 
+                // Wrap with Option if parameter is optional
+                if (param.optional === true) {
+                    rustType = `Option<${rustType}>`;
+                }
+                
                 parameters.push(`${makeRustPropertyName(param.name)}: ${rustType}`);
             } else if (param.type.type?.isClassType()) {
                 // Handle class types
@@ -64,6 +69,9 @@ export function emitMethod(code: CodeMaker, method: Method, fqn: string, assembl
                     const typeLastPart = rustType.split('.').pop()!;
                     if (typeLastPart === 'OverrideMe') {
                         rustType = typeLastPart; // Use local type name without crate::
+                        if (param.optional === true) {
+                            rustType = `Option<${rustType}>`;
+                        }
                         parameters.push(`${makeRustPropertyName(param.name)}: ${rustType}`);
                         continue;
                     }
@@ -85,14 +93,21 @@ export function emitMethod(code: CodeMaker, method: Method, fqn: string, assembl
                         .replace(/\./g, '::');
                 }
                 
+                // Wrap with Option if parameter is optional
+                if (param.optional === true) {
+                    rustType = `Option<${rustType}>`;
+                }
+                
                 parameters.push(`${makeRustPropertyName(param.name)}: ${rustType}`);
             } else if (param.type.type?.isInterfaceType()) {
                 // Handle interface types - use serde_json::Value for now as a fallback
                 // TODO: Properly handle interface types
-                parameters.push(`${makeRustPropertyName(param.name)}: serde_json::Value`);
+                const rustType = param.optional === true ? 'Option<serde_json::Value>' : 'serde_json::Value';
+                parameters.push(`${makeRustPropertyName(param.name)}: ${rustType}`);
             } else {
                 // For other types, use serde_json::Value as a fallback
-                parameters.push(`${makeRustPropertyName(param.name)}: serde_json::Value`);
+                const rustType = param.optional === true ? 'Option<serde_json::Value>' : 'serde_json::Value';
+                parameters.push(`${makeRustPropertyName(param.name)}: ${rustType}`);
             }
         }
     }
