@@ -420,11 +420,23 @@ export function emitMethod(code: CodeMaker, method: Method, fqn: string, assembl
                     //     .expect("expect 2")
                     parsed.as_f64().expect("Expected result to be a number")
                 `);
-            } else if (!method.abstract && method.parentType && method.parentType.isClassType() && method.parentType.fqn != 'jsii-calc.union.Resolvable' && method.parentType.fqn != 'jsii-calc.SingletonString' && method.parentType.fqn != 'jsii-calc.SingletonInt') {
+        } else if (!method.abstract && method.parentType && method.parentType.isClassType() && method.parentType.fqn != 'jsii-calc.union.Resolvable' && method.parentType.fqn != 'jsii-calc.SingletonString' && method.parentType.fqn != 'jsii-calc.SingletonInt') {
             // Default case: Invoke the jsii runtime to call the instance method
             // get all parameter names list so we can pass them to the invoke method
-            const paramNames = method.parameters?.map(p => makeRustPropertyName(p.name) + '.into()'  ) || [];
-            code.line(`let jsii_res = jsii_rust_runtime::JsiiRuntime::invoke(&self.jsii_object_ref, "${method.name}", Some(&[${paramNames.join(', ')}])).expect("JsiiRuntime::invoke panic");`);
+            // In your method.ts generator - modify the parameter handling for dates:
+            const params = method.parameters?.map(p => {
+                if (p.type.primitive === 'date') {
+                    return `serde_json::json!({
+                        "$jsii.date": ${makeRustPropertyName(p.name)}.map(|dt| dt.to_rfc3339())
+                    })`;
+                } else if (p.type.primitive) {
+                    return `${makeRustPropertyName(p.name)}.into()`;
+                }
+                // Don't include parameters that are not primitive or date
+                return null;
+            }).filter(Boolean).join(', ') || [];
+            
+            code.line(`let jsii_res = jsii_rust_runtime::JsiiRuntime::invoke(&self.jsii_object_ref, "${method.name}", Some(&[${params}])).expect("JsiiRuntime::invoke panic");`);
             code.line(`println!("Result: {:?}", jsii_res);`);
             code.line(`serde_json::from_str(&jsii_res).expect("Failed to deserialize result")`);
             code.line(`// TODO: Handle specific return types if needed`);
