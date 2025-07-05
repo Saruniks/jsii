@@ -2,6 +2,7 @@ import { CodeMaker } from "codemaker";
 import { Method } from "jsii-reflect";
 import { makeRustParameter } from "./rust-types";
 import { makeRustPropertyName, substituteReservedWords } from "../util";
+import { makeRustType } from "./struct";
 
 export function emitMethod(code: CodeMaker, method: Method, fqn: string, assemblyName: string, isRustInterface: boolean): void {
     let methodName = substituteReservedWords(method.name);
@@ -17,6 +18,8 @@ export function emitMethod(code: CodeMaker, method: Method, fqn: string, assembl
         for (const param of method.parameters) {
             if (param.type.primitive === 'any') {
                 parameters.push(`${makeRustPropertyName(param.name)}: serde_json::Value`);
+            } else if (param.type.primitive) {
+                parameters.push(`${makeRustPropertyName(param.name)}: ${makeRustType(param.type, assemblyName)}`);
             } else if (param.type.type?.isEnumType()) {
                 // Get the assembly/package name of the current type and the param type
                 const currentAssembly = assemblyName;

@@ -521,24 +521,32 @@ function mapAssemblyToCrateName(assemblyName: string, currentAssemblyName?: stri
     .replace(/-/g, '_'); // Replace - with _
 }
 
-function makeRustType(type: any, currentAssemblyName?: string): string {
+export function makeRustType(type: any, currentAssemblyName?: string): string {
+  const isOptional = type.optional || type.spec?.optional || false;
+  
   // Debug logging to help troubleshoot type detection
   console.log("Type to convert:", 
     type.primitive || 
     (type.collection ? `collection:${type.collection.kind}` : 
-     (type.spec?.collection ? `collection:${type.spec.collection.kind}` : "complex type")));
+     (type.spec?.collection ? `collection:${type.spec.collection.kind}` : "complex type")),
+    "Optional:", isOptional);
+  
+  // Function to wrap a type in Option<> if needed
+  const wrapOptional = (rustType: string): string => {
+    return isOptional ? `Option<${rustType}>` : rustType;
+  };
   
   // Check for primitive types first
   if (type.primitive) {
-    if (type.primitive === 'string') return 'String';
-    if (type.primitive === 'number') return 'f64';
-    if (type.primitive === 'boolean') return 'bool';
-    if (type.primitive === 'date') return 'chrono::DateTime<chrono::Utc>';
-    if (type.primitive === 'json') return 'serde_json::Value';
+    if (type.primitive === 'string') return wrapOptional('String');
+    if (type.primitive === 'number') return wrapOptional('f64');
+    if (type.primitive === 'boolean') return wrapOptional('bool');
+    if (type.primitive === 'date') return wrapOptional('chrono::DateTime<chrono::Utc>');
+    if (type.primitive === 'json') return wrapOptional('serde_json::Value');
     
     // Default for other primitives
     console.log(`Unhandled primitive type: ${type.primitive}`);
-    return 'serde_json::Value'; 
+    return wrapOptional('serde_json::Value'); 
   }
   
   // Check for collection types - both direct and in TypeReference
@@ -547,16 +555,15 @@ function makeRustType(type: any, currentAssemblyName?: string): string {
     // Handle map collections
     if (collection.kind === 'map') {
       if (!collection.elementtype) {
-        return 'std::collections::HashMap<String, String>';
+        return wrapOptional('std::collections::HashMap<String, String>');
       }
       // If element type is a union, use serde_json::Value
       if (collection.elementtype?.union) {
         console.log("Found union type in map element, using serde_json::Value");
-        return 'std::collections::HashMap<String, serde_json::Value>';
+        return wrapOptional('std::collections::HashMap<String, serde_json::Value>');
       }
       
       // For interfaces/traits in collections, we need to use the concrete wrapper type
-      // to allow for serialization/deserialization
       if (collection.elementtype.fqn) {
         // Check if the element type might be an interface/trait
         const isElementInterface = (collection.elementtype.type && 
@@ -573,28 +580,27 @@ function makeRustType(type: any, currentAssemblyName?: string): string {
           // For interface types in collections, use the concrete wrapper implementation
           const concreteType = makeConcreteWrapperType(collection.elementtype, currentAssemblyName);
           console.log(`DEBUG: Using concrete wrapper for interface in map: ${collection.elementtype.fqn} -> ${concreteType}`);
-          return `std::collections::HashMap<String, ${concreteType}>`;
+          return wrapOptional(`std::collections::HashMap<String, ${concreteType}>`);
         }
       }
       
       // For non-interface types, use the regular type
       const valueType = makeRustType(collection.elementtype, currentAssemblyName);
-      return `std::collections::HashMap<String, ${valueType}>`;
+      return wrapOptional(`std::collections::HashMap<String, ${valueType}>`);
     }
     
     // Handle array collections
     if (collection.kind === 'array') {
       if (!collection.elementtype) {
-        return 'Vec<String>';
+        return wrapOptional('Vec<String>');
       }
       // If element type is a union, use serde_json::Value
       if (collection.elementtype?.union) {
         console.log("Found union type in array element, using serde_json::Value");
-        return 'Vec<serde_json::Value>';
+        return wrapOptional('Vec<serde_json::Value>');
       }
       
       // For interfaces/traits in collections, we need to use the concrete wrapper type
-      // to allow for serialization/deserialization
       if (collection.elementtype.fqn) {
         // Check if the element type might be an interface/trait
         const isElementInterface = (collection.elementtype.type && 
@@ -611,35 +617,35 @@ function makeRustType(type: any, currentAssemblyName?: string): string {
           // For interface types in collections, use the concrete wrapper implementation
           const concreteType = makeConcreteWrapperType(collection.elementtype, currentAssemblyName);
           console.log(`DEBUG: Using concrete wrapper for interface in array: ${collection.elementtype.fqn} -> ${concreteType}`);
-          return `Vec<${concreteType}>`;
+          return wrapOptional(`Vec<${concreteType}>`);
         }
       }
       
       // Check if the element type is a union type
       if (collection.elementtype.union) {
         console.log("Found union type in array element, using serde_json::Value");
-        return 'Vec<serde_json::Value>';
+        return wrapOptional('Vec<serde_json::Value>');
       }
       
       // For non-interface types, use the regular type
       const elementType = makeRustType(collection.elementtype, currentAssemblyName);
-      return `Vec<${elementType}>`;
+      return wrapOptional(`Vec<${elementType}>`);
     }
     
     console.log(`Unhandled collection kind: ${collection.kind}`);
-    return '()'; // Default for unknown collections
+    return wrapOptional('()'); // Default for unknown collections
   }
   
   // Check for unions (direct union types)
   if (type.union || type.spec?.union) {
     console.log("Found union type");
-    return 'serde_json::Value'; // Use a generic value for unions
+    return wrapOptional('serde_json::Value'); // Use a generic value for unions
   }
   
   // Check for enum types
   if (type.type?.isEnumType && type.type.isEnumType()) {
     console.log("Found enum type");
-    return 'String'; // Default representation for enums
+    return wrapOptional('String'); // Default representation for enums
   }
 
   // Handle complex types (structs, interfaces, classes)
@@ -662,17 +668,17 @@ function makeRustType(type: any, currentAssemblyName?: string): string {
     if (isInterface) {
       console.log(`Found interface type with FQN: ${type.fqn}, generating concrete wrapper: ${fullPath}Impl`);
       // For interfaces, return a concrete wrapper type that can be serialized
-      return `${fullPath}Impl`;
+      return wrapOptional(`${fullPath}Impl`);
     }
     
     console.log(`Found complex/reference type with FQN: ${type.fqn}, Current: ${currentAssemblyName}, Rust type: ${fullPath}`);
-    return fullPath;
+    return wrapOptional(fullPath);
   }
   
   // Default case
   console.log("Unable to determine type:", 
     type.constructor ? type.constructor.name : typeof type);
-  return '()';
+  return wrapOptional('()');
 }
 
 function isTraitType(type: any): boolean {
