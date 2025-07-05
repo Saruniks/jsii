@@ -212,7 +212,7 @@ export class RustStruct extends RustType<ClassType> {
                 
                   if (isComplexType) {
                     // For complex types, extract the object reference and construct a new instance
-                    const typeName = makeRustType(property.type, this.type.assembly.name, property.optional);
+                    const typeName = makeRustType(property.type, this.type.assembly.name, false); // Fake the isBoolean for now
                     
                     // Check if this is an interface type that needs concrete wrapper
                     const isInterface = (property.type.type && property.type.type.isInterfaceType && property.type.type.isInterfaceType()) ||
