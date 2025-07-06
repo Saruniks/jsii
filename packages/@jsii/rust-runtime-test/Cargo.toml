@@ -7,6 +7,9 @@ edition = "2024"
 jsii-rust-runtime = { path = "../jsii-rust-runtime" }
 jsii-calc = { path = "../../../output/rust/jsii-calc" }
 scope-jsii-calc-lib = { path = "../../../output/rust/scope-jsii-calc-lib" }
+constructs = { path = "../../../output/rust/constructs" }
+aws-cdk-region-info = { path = "../../../output/rust/aws-cdk-region-info" }
+aws-cdk-lib = { path = "../../../output/rust/aws-cdk-lib", default-features = false }
 
 [dev-dependencies]
 trybuild = "1.0.105"

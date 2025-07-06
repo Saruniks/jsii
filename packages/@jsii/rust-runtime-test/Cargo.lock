@@ -24,6 +24,60 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c08606f8c3cbf4ce6ec8e28fb0014a2c086708fe954eaa885384a6165172e7e8"
 
 [[package]]
+name = "aws-cdk-asset-awscli-v1"
+version = "0.0.0"
+dependencies = [
+ "chrono",
+ "jsii-rust-runtime",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "aws-cdk-asset-node-proxy-agent-v6"
+version = "0.0.0"
+dependencies = [
+ "chrono",
+ "jsii-rust-runtime",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "aws-cdk-cloud-assembly-schema"
+version = "0.0.0"
+dependencies = [
+ "chrono",
+ "jsii-rust-runtime",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "aws-cdk-lib"
+version = "0.0.0"
+dependencies = [
+ "aws-cdk-asset-awscli-v1",
+ "aws-cdk-asset-node-proxy-agent-v6",
+ "aws-cdk-cloud-assembly-schema",
+ "chrono",
+ "constructs",
+ "jsii-rust-runtime",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "aws-cdk-region-info"
+version = "0.0.0"
+dependencies = [
+ "chrono",
+ "jsii-rust-runtime",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "base64"
 version = "0.22.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -69,6 +123,16 @@ dependencies = [
  "serde",
  "wasm-bindgen",
  "windows-link",
+]
+
+[[package]]
+name = "constructs"
+version = "0.0.0"
+dependencies = [
+ "chrono",
+ "jsii-rust-runtime",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -354,7 +418,10 @@ dependencies = [
 name = "rust-runtime-test"
 version = "0.1.0"
 dependencies = [
+ "aws-cdk-lib",
+ "aws-cdk-region-info",
  "chrono",
+ "constructs",
  "jsii-calc",
  "jsii-rust-runtime",
  "scope-jsii-calc-lib",
